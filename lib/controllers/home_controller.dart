@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/activity.dart';
 import '../core/copy.dart';
 import '../core/models/automation.dart';
 import '../core/models/job.dart';
@@ -10,16 +11,6 @@ import '../providers/job_catalog_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../providers/run_provider.dart';
 import '../providers/subscription_provider.dart';
-
-/// One item in "Recent activity".
-class Activity {
-  const Activity({required this.title, required this.detail, required this.at, required this.kind});
-  final String title, detail;
-  final DateTime at;
-  final ActivityKind kind;
-}
-
-enum ActivityKind { run, failed, applied, automation }
 
 /// Aggregates the dashboard from providers. No data of its own — it just
 /// triggers loads and derives the numbers the Home screen shows.
@@ -43,16 +34,24 @@ class HomeController extends ChangeNotifier {
 
   /// When the last search finished (manual or automatic), if ever.
   DateTime? get lastRunAt {
-    final manual = _runs.history.where((r) => !r.isActive).map((r) => r.finishedAt ?? r.startedAt);
-    final auto = _prefs.automations.map((a) => a.lastRunAt).whereType<DateTime>();
+    final manual = _runs.history
+        .where((r) => !r.isActive)
+        .map((r) => r.finishedAt ?? r.startedAt);
+    final auto = _prefs.automations
+        .map((a) => a.lastRunAt)
+        .whereType<DateTime>();
     final all = [...manual, ...auto]..sort((a, b) => b.compareTo(a));
     return all.firstOrNull;
   }
 
   /// The soonest enabled automation.
   DateTime? get nextAutoRunAt {
-    final next = _prefs.automations.where((a) => a.enabled && a.nextRunAt != null).map((a) => a.nextRunAt!).toList()
-      ..sort();
+    final next =
+        _prefs.automations
+            .where((a) => a.enabled && a.nextRunAt != null)
+            .map((a) => a.nextRunAt!)
+            .toList()
+          ..sort();
     return next.firstOrNull;
   }
 
@@ -64,7 +63,10 @@ class HomeController extends ChangeNotifier {
   bool get ready => _catalog.loaded && _prefs.loaded;
   int get newMatches => _catalog.newMatches;
   int get applications => _catalog.applied;
+  int get totalJobs => _catalog.all.where((j) => !j.hidden).length;
   int get automationsRunning => _prefs.automationsRunning;
+  int get searchLimit => _subs.plan.searchLimit;
+  String get planLabel => _subs.plan.label;
   List<Job> get recommended => _catalog.recommended();
   List<Automation> get automations => _prefs.automations;
   bool get hasResume => _prefs.career.isEmpty == false;
@@ -88,34 +90,8 @@ class HomeController extends ChangeNotifier {
     return '$strong jobs look worth applying to today.';
   }
 
-  List<Activity> get recent {
-    final items = <Activity>[
-      for (final r in _runs.history.take(5))
-        Activity(
-          title: r.isFailed ? 'Search failed' : 'Search finished',
-          detail: r.isFailed
-              ? r.request.interests.join(', ')
-              : '${r.stats?.recommended ?? 0} matches for ${r.request.interests.join(', ')}',
-          at: r.finishedAt ?? r.startedAt,
-          kind: r.isFailed ? ActivityKind.failed : ActivityKind.run,
-        ),
-      for (final a in _prefs.automations.where((a) => a.lastRunAt != null))
-        Activity(
-          title: a.name,
-          detail: a.lastResultCount == null ? 'Ran' : '${a.lastResultCount} new jobs',
-          at: a.lastRunAt!,
-          kind: ActivityKind.automation,
-        ),
-      for (final j in _catalog.all.where((j) => j.applied).take(3))
-        Activity(
-          title: 'Applied',
-          detail: '${j.title} · ${j.company}',
-          at: j.postedAt ?? DateTime.now(),
-          kind: ActivityKind.applied,
-        ),
-    ]..sort((a, b) => b.at.compareTo(a.at));
-    return items.take(5).toList();
-  }
+  List<Activity> get recent =>
+      recentActivity(runs: _runs.history, automations: _prefs.automations, jobs: _catalog.all);
 
   Run? get latestRun => _runs.history.firstOrNull;
 }

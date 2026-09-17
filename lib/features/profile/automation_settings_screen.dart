@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../app/routes.dart';
 import '../../app/theme/theme.dart';
 import '../../core/copy.dart';
 import '../../core/models/automation.dart';
@@ -31,6 +33,16 @@ class AutomationSettingsScreen extends StatelessWidget {
         children: [
           SettingsGroup(
             label: 'Schedules',
+            trailing: TextButton.icon(
+              onPressed: () => context.push(AppRoutes.schedule),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add'),
+              style: TextButton.styleFrom(
+                foregroundColor: c.oceanDeep,
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
             children: [
               if (prefs.automations.isEmpty)
                 Padding(
@@ -39,21 +51,28 @@ class AutomationSettingsScreen extends StatelessWidget {
                 )
               else
                 for (final a in prefs.automations)
-                  SettingsSwitch(
-                    label: a.name,
-                    subtitle: a.enabled
-                        ? '${a.schedule}${a.nextRunAt == null ? '' : ' · next ${JmCopy.relativeFuture(a.nextRunAt!)}'}'
-                        : 'Paused · ${a.schedule}',
-                    value: a.enabled,
-                    onChanged: (v) => prefs.toggleAutomation(a, v).catchError((_) {
-                      if (!context.mounted) return;
-                      showJmToast(context, title: "Couldn't update the schedule", tone: ToastTone.error);
-                    }),
+                  // Long-press a schedule to delete it.
+                  GestureDetector(
+                    onLongPress: () => _confirmDelete(context, prefs, a),
+                    child: SettingsSwitch(
+                      label: a.name,
+                      subtitle: a.enabled
+                          ? '${a.schedule}${a.nextRunAt == null ? '' : ' · next ${JmCopy.relativeFuture(a.nextRunAt!)}'}'
+                          : 'Paused · ${a.schedule}',
+                      value: a.enabled,
+                      onChanged: (v) => prefs.toggleAutomation(a, v).catchError((_) {
+                        if (!context.mounted) return;
+                        showJmToast(context, title: "Couldn't update the schedule", tone: ToastTone.error);
+                      }),
+                    ),
                   ),
             ],
           ),
           const SizedBox(height: JmSpace.x3),
-          Text('Scheduled searches count against your plan the same as manual ones.', style: context.type.meta),
+          Text(
+            'Scheduled searches count against your plan the same as manual ones. Long-press one to delete it.',
+            style: context.type.meta,
+          ),
           const SizedBox(height: JmSpace.x6),
           SettingsGroup(
             label: 'Notifications',
@@ -121,4 +140,26 @@ class AutomationSettingsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _confirmDelete(BuildContext context, PreferencesProvider prefs, Automation a) async {
+  final yes = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete this schedule?'),
+      content: Text(a.name),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: context.jm.danger),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (yes != true || !context.mounted) return;
+  prefs.deleteAutomation(a).catchError((_) {
+    if (context.mounted) showJmToast(context, title: "Couldn't delete the schedule", tone: ToastTone.error);
+  });
 }

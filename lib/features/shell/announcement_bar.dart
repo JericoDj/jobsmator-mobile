@@ -10,7 +10,7 @@ import '../../providers/run_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../shared/widgets/jm_ticker.dart';
 
-/// The navy strip that runs under the notch on every tab: short headlines
+/// The strip that runs under the notch on every tab: short headlines
 /// about what JobsMator is doing for you, scrolling past like a news ticker.
 /// Reads the app-level providers directly so it needs no controller.
 class AnnouncementBar extends StatelessWidget {
@@ -50,13 +50,20 @@ class AnnouncementBar extends StatelessWidget {
       prefs: context.watch<PreferencesProvider>(),
       subs: context.watch<SubscriptionProvider>(),
     );
+    // Inverted against the page: navy on light mode, a light strip on dark
+    // mode, so it always reads as a distinct header band.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    const light = JmColors.light;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: ColoredBox(
-        color: JmColors.navy,
+      value: dark ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: dark ? light.surface : JmColors.navy,
+          border: dark ? Border(bottom: BorderSide(color: light.line)) : null,
+        ),
         child: SafeArea(
           bottom: false,
-          child: JmTicker(items: list),
+          child: JmTicker(items: list, color: dark ? light.muted : JmColors.navyText),
         ),
       ),
     );

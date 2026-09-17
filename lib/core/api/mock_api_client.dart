@@ -69,6 +69,10 @@ class MockApiClient implements ApiClient {
       };
     }
     if (path == '/v1/jobs') return {'items': _jobs.values.toList(), 'nextCursor': null};
+    if (path == '/v1/jobs/feed') {
+      final all = _jobs.values.toList()..shuffle(Random());
+      return {'items': all.take(int.tryParse('${query?['limit'] ?? 12}') ?? 12).toList(), 'nextCursor': null};
+    }
     final one = RegExp(r'^/v1/jobs/([^/]+)$').firstMatch(path);
     if (one != null && _jobs[one.group(1)!] != null) return _jobs[one.group(1)!]!;
     if (path == '/v1/jobs/saved') return {'items': _jobs.values.where((j) => j['saved'] == true).toList()};
@@ -92,6 +96,23 @@ class MockApiClient implements ApiClient {
   Future<Map<String, dynamic>> post(String path, {Object? body}) async {
     await Future.delayed(_latency);
     final b = (body as Map?)?.cast<String, dynamic>() ?? const {};
+    if (path == '/v1/automations') {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      final freq = b['frequency'] as String;
+      final when = freq == 'daily' ? 'Every day' : freq == 'weekdays' ? 'Weekdays' : '${days[b['weekday'] ?? 1]}s';
+      final time = '${b['hour']}:${(b['minute'] ?? 0).toString().padLeft(2, '0')}';
+      final a = {
+        'id': 'auto_${DateTime.now().millisecondsSinceEpoch}',
+        'name': b['name'] ?? '$when search for ${(b['interests'] as List).first}',
+        'schedule': '$when · $time',
+        'enabled': true,
+        'lastRunAt': null,
+        'nextRunAt': DateTime.now().add(const Duration(hours: 12)).toIso8601String(),
+        'lastResultCount': null,
+      };
+      _automations.insert(0, a);
+      return a;
+    }
     if (path == '/v1/auth/register') {
       final name = b['displayName'] as String? ?? 'Jerico De Jesus';
       final email = b['email'] as String? ?? 'jerico@example.com';
@@ -151,16 +172,16 @@ class MockApiClient implements ApiClient {
       };
       return {'subscription': _subscription};
     }
-    final action = RegExp(r'^/v1/jobs/([^/]+)/(save|hide|apply)$').firstMatch(path);
+    final action = RegExp(r'^/v1/jobs/([^/]+)/(save|hide|applied|responded|interview)$').firstMatch(path);
     if (action != null) {
       final job = _jobs[action.group(1)!];
       if (job != null) {
         final key = switch (action.group(2)) {
           'save' => 'saved',
           'hide' => 'hidden',
-          _ => 'applied',
+          final a => a!,
         };
-        job[key] = !(job[key] as bool);
+        job[key] = !(job[key] as bool? ?? false);
       }
       return const {};
     }
@@ -198,6 +219,7 @@ class MockApiClient implements ApiClient {
   Future<void> delete(String path) async {
     await Future.delayed(_latency);
     _resumes.removeWhere((r) => path.endsWith(r['id'] as String));
+    if (path.startsWith('/v1/automations/')) _automations.removeWhere((a) => path.endsWith(a['id'] as String));
   }
 
   Map<String, dynamic> _run(String id) {
@@ -318,6 +340,10 @@ const _sitesAll = [
 ];
 DateTime _ago(int days) => DateTime.now().subtract(Duration(days: days, hours: _rng.nextInt(20)));
 
+/// Sample listings, also used by Home as placeholder content while the
+/// real catalogue and job board are empty.
+List<Map<String, dynamic>> get fixtureJobs => _fixtureJobs;
+
 final List<Map<String, dynamic>> _fixtureJobs = [
   {
     'id': 'j1',
@@ -359,7 +385,9 @@ final List<Map<String, dynamic>> _fixtureJobs = [
     'redFlags': ['Salary hidden'],
     'saved': true,
     'hidden': false,
-    'applied': false,
+    'applied': true,
+    'responded': true,
+    'interview': true,
   },
   {
     'id': 'j3',

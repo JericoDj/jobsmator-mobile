@@ -8,6 +8,7 @@ import '../../core/models/tool.dart';
 import '../../providers/subscription_provider.dart';
 import '../shared/widgets/art_tile.dart';
 import '../shared/widgets/jm_page.dart';
+import '../shared/widgets/notification_bell.dart';
 import '../shared/widgets/tab_header.dart';
 
 /// Utilities the user runs one at a time. Premium ones carry a small mark;
@@ -24,7 +25,7 @@ class ToolsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const TabHeader(title: 'Tools', subtitle: 'Built on your resume and preferences, not a template.'),
+          const TabHeader(title: 'Tools', subtitle: 'Made from your resume.', trailing: NotificationBell()),
           const SizedBox(height: JmSpace.x6),
           ArtGrid(
             children: [
@@ -43,6 +44,8 @@ class ToolsScreen extends StatelessWidget {
           if (!pro) ...[
             const SizedBox(height: JmSpace.x6),
             Text('Tools marked Pro are part of the Pro plan.', style: context.type.meta),
+            // Room for the floating "Get full access" pill.
+            const SizedBox(height: 50),
           ],
         ],
       ),

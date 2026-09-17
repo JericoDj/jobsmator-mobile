@@ -5,21 +5,22 @@ import 'package:provider/provider.dart';
 import '../../app/routes.dart';
 import '../../app/theme/theme.dart';
 import '../../controllers/home_controller.dart';
+import '../../core/api/mock_api_client.dart';
 import '../../core/copy.dart';
-import '../../core/models/automation.dart';
+import '../../core/models/job.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/job_catalog_provider.dart';
 import '../../providers/preferences_provider.dart';
 import '../../providers/run_provider.dart';
-import '../jobs/widgets/job_row.dart';
-import '../shared/widgets/cta_card.dart';
 import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_page.dart';
-import '../shared/widgets/jm_robot.dart';
+import '../shared/widgets/notification_bell.dart';
+import '../shared/widgets/section_header.dart';
 import '../shared/widgets/tab_header.dart';
+import 'job_list_screen.dart';
 
-/// The command centre. Numbers first, then the three best jobs, then what
-/// the assistant thinks, then what's running and what just happened.
+/// Home is the product's promise in four rows, no copy needed:
+/// Search → Jobs → Matches → Activity.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -34,13 +35,31 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<JobCatalogProvider>();
+    final catalog = context.watch<JobCatalogProvider>();
     context.watch<RunProvider>();
     context.watch<PreferencesProvider>();
     final ctrl = context.watch<HomeController>();
     final user = context.watch<AuthProvider>().user;
-    final unseen = context.select<RunProvider, bool>((r) => r.unseenResult);
     final c = context.jm;
+
+    // Until the catalogue has anything real, every row runs on the fixture
+    // jobs and says so — the layout should never sit empty.
+    final sample = catalog.all.isEmpty;
+    final jobs = sample
+        ? fixtureJobs.map((j) => Job.fromJson(j)).toList()
+        : catalog.all.where((j) => !j.hidden).toList();
+    final newMatches = jobs
+        .where((j) => j.tier != Tier.skip && !j.applied)
+        .length;
+    final saved = jobs.where((j) => j.saved).length;
+    final applied = jobs.where((j) => j.applied).length;
+    final responded = jobs.where((j) => j.responded).length;
+    final interviews = jobs.where((j) => j.interview).length;
+    final matches =
+        (jobs.where((j) => j.tier == Tier.strong && !j.applied).toList()
+              ..sort((a, b) => b.score.compareTo(a.score)))
+            .take(3)
+            .toList();
 
     return JmPage(
       maxWidth: JmLayout.results,
@@ -49,176 +68,82 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TabHeader(
-            title: '${_greeting()}, ${user?.firstName ?? 'there'} 👋',
-            subtitle: ctrl.subtext,
-            trailing: _BellButton(unread: unseen, onTap: () => context.push(AppRoutes.history)),
+            title: '${_greeting()}, ${user?.firstName ?? 'there'}',
+            subtitle: 'Search less. Apply more.',
+            trailing: const NotificationBell(),
           ),
           const SizedBox(height: JmSpace.x6),
 
-          // Numbers
+          // 1 · Search
+          _SearchCard(
+            left: ctrl.searchesLeft,
+            limit: ctrl.searchLimit,
+            period: ctrl.planPeriod,
+            running: ctrl.runInProgress,
+            nextAutoRunAt: ctrl.nextAutoRunAt,
+            onSearch: () => context.go(
+              ctrl.runInProgress
+                  ? AppRoutes.run(context.read<RunProvider>().current!.id)
+                  : AppRoutes.upload,
+            ),
+            onSchedule: () => context.push(AppRoutes.schedule),
+          ),
+          const SizedBox(height: JmSpace.x6),
+
+          // 2 · Jobs
+          SectionHeader(title: 'Your jobs', badge: sample ? 'Sample' : null),
+          const SizedBox(height: JmSpace.x3),
           Row(
             children: [
               Expanded(
-                child: _Stat(
-                  label: 'New matches',
-                  value: ctrl.newMatches,
-                  icon: Icons.track_changes_rounded,
+                child: _Count(
+                  value: newMatches,
+                  label: 'New',
                   color: c.match,
-                  onTap: () => context.go(AppRoutes.jobs),
+                  onTap: () =>
+                      context.push(AppRoutes.jobList(JobListKind.matches.name)),
                 ),
               ),
-              const SizedBox(width: JmSpace.x3),
               Expanded(
-                child: _Stat(
-                  label: 'Applications',
-                  value: ctrl.applications,
-                  icon: Icons.send_rounded,
+                child: _Count(
+                  value: saved,
+                  label: 'Saved',
                   color: c.ocean,
-                  onTap: () {
-                    context.read<JobCatalogProvider>().setFilter(JobFilter.applied);
-                    context.go(AppRoutes.jobs);
-                  },
+                  onTap: () =>
+                      context.push(AppRoutes.jobList(JobListKind.saved.name)),
                 ),
               ),
-              const SizedBox(width: JmSpace.x3),
               Expanded(
-                child: _Stat(
-                  label: 'Automations',
-                  value: ctrl.automationsRunning,
-                  icon: Icons.bolt_rounded,
+                child: _Count(
+                  value: applied,
+                  label: 'Applied',
                   color: c.sky,
-                  onTap: () => context.push(AppRoutes.automation),
+                  onTap: () =>
+                      context.push(AppRoutes.jobList(JobListKind.applied.name)),
                 ),
               ),
             ],
           ),
           const SizedBox(height: JmSpace.x6),
 
-          // Run it — the one action the whole screen leads to. Just a title
-          // and the buttons; the numbers live in the ticker above.
-          CtaCard(
-            title: ctrl.runInProgress
-                ? 'A search is running'
-                : !ctrl.canSearch
-                ? 'Out of searches ${ctrl.planPeriod}'
-                : ctrl.lastRunAt == null
-                ? 'Run your first search'
-                : 'Run a search now',
-            actionLabel: ctrl.runInProgress ? 'See progress' : 'Search',
-            actionIcon: ctrl.runInProgress ? Icons.timelapse_rounded : Icons.play_arrow_rounded,
-            onAction: () => context.go(
-              ctrl.runInProgress ? AppRoutes.run(context.read<RunProvider>().current!.id) : AppRoutes.upload,
-            ),
-            secondaryLabel: 'Schedules',
-            onSecondary: () => context.push(AppRoutes.automation),
-          ),
-          const SizedBox(height: JmSpace.x8),
-
-          // Recommended
-          _SectionHeader(
-            title: 'Recommended for you',
-            action: 'View all jobs',
-            onAction: () => context.go(AppRoutes.jobs),
+          // 3 · Matches
+          SectionHeader(
+            title: 'Matches',
+            badge: sample ? 'Sample' : null,
+            action: 'See all',
+            onAction: () =>
+                context.push(AppRoutes.jobList(JobListKind.matches.name)),
           ),
           const SizedBox(height: JmSpace.x3),
-          if (!ctrl.ready)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: JmSpace.x6),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (ctrl.recommended.isEmpty)
-            _QuietCard(
-              icon: Icons.upload_file_rounded,
+          if (matches.isEmpty)
+            _Empty(
               text: ctrl.hasResume
-                  ? 'No strong matches yet. Run a search to fill this in.'
-                  : 'Upload a resume and run your first search.',
-              action: SecondaryButton(label: 'Find matching jobs', onPressed: () => context.go(AppRoutes.upload)),
-            )
-          else
-            for (final (i, job) in ctrl.recommended.indexed) ...[
-              if (i > 0) const SizedBox(height: JmSpace.x2),
-              JobRow(job: job, onTap: () => context.push(AppRoutes.job(job.id))),
-            ],
-          const SizedBox(height: JmSpace.x8),
-
-          // AI suggestion — the robot says one line; tap to talk to it.
-          Material(
-            color: c.skyTint,
-            borderRadius: JmRadius.lgR,
-            child: InkWell(
-              onTap: () => context.go(AppRoutes.ai),
-              borderRadius: JmRadius.lgR,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(JmSpace.x3, JmSpace.x3, JmSpace.x3, JmSpace.x3),
-                child: Row(
-                  children: [
-                    const JmRobot(size: 40, tinted: false),
-                    const SizedBox(width: JmSpace.x3),
-                    Expanded(
-                      child: Text(ctrl.suggestion, style: context.type.body.copyWith(color: c.ink, fontSize: 15)),
-                    ),
-                    const SizedBox(width: JmSpace.x2),
-                    Icon(Icons.chat_bubble_outline_rounded, size: 20, color: c.skyDeep),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: JmSpace.x8),
-
-          // Quick actions
-          JmLabel('Quick actions', color: c.muted),
-          const SizedBox(height: JmSpace.x3),
-          Wrap(
-            spacing: JmSpace.x2,
-            runSpacing: JmSpace.x2,
-            children: [
-              _Quick(
-                icon: Icons.search_rounded,
+                  ? 'No matches yet.'
+                  : 'Upload a resume to get matches.',
+              action: SecondaryButton(
                 label: 'Find matching jobs',
-                onTap: () => context.go(AppRoutes.upload),
+                onPressed: () => context.go(AppRoutes.upload),
               ),
-              _Quick(
-                icon: Icons.description_outlined,
-                label: 'Analyze my resume',
-                onTap: () => context.push(AppRoutes.tool('resume-analyzer')),
-              ),
-              _Quick(
-                icon: Icons.mail_outline_rounded,
-                label: 'Write an application',
-                onTap: () => context.push(AppRoutes.tool('application-email')),
-              ),
-              _Quick(
-                icon: Icons.record_voice_over_outlined,
-                label: 'Interview prep',
-                onTap: () => context.push(AppRoutes.tool('interview-prep')),
-              ),
-            ],
-          ),
-          const SizedBox(height: JmSpace.x8),
-
-          // Automations
-          _SectionHeader(title: 'Automations', action: 'Manage', onAction: () => context.push(AppRoutes.automation)),
-          const SizedBox(height: JmSpace.x3),
-          if (ctrl.automations.isEmpty)
-            _QuietCard(
-              icon: Icons.bolt_rounded,
-              text: 'No automations yet. Schedule a search and JobsMator keeps looking while you sleep.',
-            )
-          else
-            for (final (i, a) in ctrl.automations.indexed) ...[
-              if (i > 0) const SizedBox(height: JmSpace.x2),
-              _AutomationRow(automation: a),
-            ],
-          const SizedBox(height: JmSpace.x8),
-
-          // Recent activity
-          _SectionHeader(title: 'Recent activity', action: 'History', onAction: () => context.push(AppRoutes.history)),
-          const SizedBox(height: JmSpace.x3),
-          if (ctrl.recent.isEmpty)
-            _QuietCard(
-              icon: Icons.history_rounded,
-              text: 'Nothing yet — your searches and applications will show up here.',
             )
           else
             Container(
@@ -229,13 +154,50 @@ class HomeScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  for (final (i, item) in ctrl.recent.indexed) ...[
-                    if (i > 0) const Divider(),
-                    _ActivityRow(item: item),
+                  for (final (i, job) in matches.indexed) ...[
+                    if (i > 0) Divider(height: 1, color: c.line),
+                    _MatchRow(
+                      job: job,
+                      // Sample rows have nothing to open; real ones go to the job.
+                      onTap: sample
+                          ? null
+                          : () => context.push(AppRoutes.job(job.id)),
+                    ),
                   ],
                 ],
               ),
             ),
+          const SizedBox(height: JmSpace.x6),
+
+          // 4 · Activity
+          SectionHeader(
+            title: 'Activity',
+            badge: sample ? 'Sample' : null,
+            action: 'History',
+            onAction: () => context.push(AppRoutes.history),
+          ),
+          const SizedBox(height: JmSpace.x3),
+          Row(
+            children: [
+              Expanded(
+                child: _Count(value: applied, label: 'Applied', color: c.ocean),
+              ),
+              Expanded(
+                child: _Count(
+                  value: responded,
+                  label: 'Responses',
+                  color: c.sky,
+                ),
+              ),
+              Expanded(
+                child: _Count(
+                  value: interviews,
+                  label: 'Interviews',
+                  color: c.match,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: JmSpace.x6),
         ],
       ),
@@ -243,116 +205,250 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Bell in the top-right corner. A Volt dot means a search finished while
-/// you were elsewhere — same signal the Jobs tab shows.
-class _BellButton extends StatelessWidget {
-  const _BellButton({required this.unread, required this.onTap});
-  final bool unread;
-  final VoidCallback onTap;
+/// The one action: credits left inside a ring, one big button, and a
+/// quiet link to schedule. Sits on a soft cobalt→sky wash so it reads as
+/// the hero of the page without a block of dark colour.
+class _SearchCard extends StatelessWidget {
+  const _SearchCard({
+    required this.left,
+    required this.limit,
+    required this.period,
+    required this.running,
+    required this.nextAutoRunAt,
+    required this.onSearch,
+    required this.onSchedule,
+  });
+  final int left, limit;
+  final String period;
+  final bool running;
+  final DateTime? nextAutoRunAt;
+  final VoidCallback onSearch, onSchedule;
 
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          tooltip: 'Notifications',
-          onPressed: onTap,
-          icon: const Icon(Icons.notifications_none_rounded),
-          color: c.ink,
-          style: IconButton.styleFrom(
-            backgroundColor: c.card,
-            side: BorderSide(color: c.line),
-            fixedSize: const Size(44, 44),
-          ),
-        ),
-        if (unread)
-          Positioned(
-            top: 6,
-            right: 6,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: c.volt, shape: BoxShape.circle, border: Border.all(color: c.card, width: 2)),
+    final canSearch = left > 0 || running;
+    final share = limit == 0 ? 0.0 : (left / limit).clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: JmRadius.lgR,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(child: ColoredBox(color: c.card)),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(1.2, -1.2),
+                  radius: 1.2,
+                  colors: [c.ocean.withValues(alpha: .16), Colors.transparent],
+                ),
+              ),
             ),
           ),
-      ],
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-1.1, 1.4),
+                  radius: 1.0,
+                  colors: [c.sky.withValues(alpha: .14), Colors.transparent],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: JmRadius.lgR,
+                border: Border.all(color: c.line),
+              ),
+            ),
+          ),
+          // Full width so the wash fills the card, and everything centred.
+          SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                JmSpace.x4,
+                JmSpace.x4,
+                JmSpace.x4,
+                JmSpace.x2,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 84,
+                    height: 84,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: share),
+                          duration: JmMotion.ringFill,
+                          curve: JmMotion.ease,
+                          builder: (_, v, _) => CircularProgressIndicator(
+                            value: running ? null : v,
+                            strokeWidth: 6,
+                            strokeCap: StrokeCap.round,
+                            color: left == 0 && !running ? c.faint : c.ocean,
+                            backgroundColor: c.surface2,
+                          ),
+                        ),
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '$left',
+                                style: context.type.stat.copyWith(
+                                  fontSize: 28,
+                                  height: 1,
+                                  color: c.ink,
+                                ),
+                              ),
+                              Text(
+                                'of $limit',
+                                style: context.type.meta.copyWith(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: JmSpace.x2),
+                  Text(
+                    running
+                        ? 'Search running'
+                        : '${left == 1 ? 'Search' : 'Searches'} left $period',
+                    style: context.type.meta.copyWith(fontSize: 13),
+                  ),
+                  const SizedBox(height: JmSpace.x3),
+                  SizedBox(
+                    width: 220,
+                    child: PrimaryButton(
+                      label: running ? 'See progress' : 'Search now',
+                      icon: running
+                          ? Icons.timelapse_rounded
+                          : Icons.play_arrow_rounded,
+                      onPressed: canSearch ? onSearch : null,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: onSchedule,
+                    style: TextButton.styleFrom(foregroundColor: c.oceanDeep),
+                    icon: const Icon(Icons.schedule_rounded, size: 16),
+                    label: Text(
+                      nextAutoRunAt == null
+                          ? 'Schedule'
+                          : 'Next run ${JmCopy.relativeFuture(nextAutoRunAt!)}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value, required this.icon, required this.color, required this.onTap});
-  final String label;
+/// Number over label, centred. Tappable when [onTap] is set.
+class _Count extends StatelessWidget {
+  const _Count({
+    required this.value,
+    required this.label,
+    required this.color,
+    this.onTap,
+  });
   final int value;
-  final IconData icon;
+  final String label;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(vertical: JmSpace.x2),
+      child: Column(
+        children: [
+          Text(
+            '$value',
+            style: context.type.stat.copyWith(
+              fontSize: 22,
+              color: value == 0 ? c.faint : c.ink,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(label, style: context.type.meta.copyWith(fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (onTap == null) return body;
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: JmRadius.mdR,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          decoration: BoxDecoration(
-            color: c.card,
-            borderRadius: JmRadius.mdR,
-            border: Border.all(color: c.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(height: 8),
-              Text('$value', style: context.type.stat),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: context.type.meta.copyWith(fontSize: 12),
+      child: InkWell(onTap: onTap, borderRadius: JmRadius.mdR, child: body),
+    );
+  }
+}
+
+/// Score and title, nothing else.
+class _MatchRow extends StatelessWidget {
+  const _MatchRow({required this.job, required this.onTap});
+  final Job job;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    final color = job.score >= 80 ? c.matchDeep : c.oceanDeep;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 44,
+              child: Text(
+                '${job.score}%',
+                style: context.type.stat.copyWith(fontSize: 15, color: color),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                job.title,
+                style: context.type.uiStrong,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.action, this.onAction});
-  final String title;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(child: Text(title, style: context.type.heading)),
-      if (action != null)
-        TextButton(
-          onPressed: onAction,
-          style: TextButton.styleFrom(
-            minimumSize: const Size(0, 32),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            foregroundColor: context.jm.oceanDeep,
-          ),
-          child: Text(action!),
-        ),
-    ],
-  );
-}
-
-class _QuietCard extends StatelessWidget {
-  const _QuietCard({required this.icon, required this.text, this.action});
-  final IconData icon;
+class _Empty extends StatelessWidget {
+  const _Empty({required this.text, this.action});
   final String text;
   final Widget? action;
 
@@ -365,136 +461,8 @@ class _QuietCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: c.muted),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(text, style: context.type.body.copyWith(fontSize: 15, color: c.text)),
-              ),
-            ],
-          ),
+          Text(text, style: context.type.body.copyWith(fontSize: 15)),
           if (action != null) ...[const SizedBox(height: JmSpace.x3), action!],
-        ],
-      ),
-    );
-  }
-}
-
-class _Quick extends StatelessWidget {
-  const _Quick({required this.icon, required this.label, required this.onTap});
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.jm;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: JmRadius.mdR,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: JmLayout.touchTarget),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: c.card,
-            borderRadius: JmRadius.mdR,
-            border: Border.all(color: c.lineStrong),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: c.oceanDeep),
-              const SizedBox(width: 8),
-              Text(label, style: context.type.uiStrong.copyWith(fontSize: 14)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AutomationRow extends StatelessWidget {
-  const _AutomationRow({required this.automation});
-  final Automation automation;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.jm;
-    final a = automation;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: JmRadius.mdR,
-        border: Border.all(color: c.line),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(color: a.enabled ? c.match : c.faint, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(a.name, style: context.type.uiStrong),
-                Text(
-                  a.enabled
-                      ? '${a.schedule}${a.nextRunAt == null ? '' : ' · next ${JmCopy.relativeFuture(a.nextRunAt!)}'}'
-                      : 'Paused · ${a.schedule}',
-                  style: context.type.meta,
-                ),
-              ],
-            ),
-          ),
-          if (a.lastResultCount != null)
-            Text(
-              '+${a.lastResultCount}',
-              style: context.type.stat.copyWith(fontSize: 16, color: a.enabled ? c.ink : c.muted),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityRow extends StatelessWidget {
-  const _ActivityRow({required this.item});
-  final Activity item;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.jm;
-    final (icon, color) = switch (item.kind) {
-      ActivityKind.run => (Icons.search_rounded, c.match),
-      ActivityKind.failed => (Icons.error_outline_rounded, c.danger),
-      ActivityKind.applied => (Icons.send_rounded, c.ocean),
-      ActivityKind.automation => (Icons.bolt_rounded, c.sky),
-    };
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.title, style: context.type.uiStrong.copyWith(fontSize: 14)),
-                Text(item.detail, style: context.type.meta, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(JmCopy.relative(item.at), style: context.type.meta.copyWith(color: c.faint, fontSize: 12)),
         ],
       ),
     );

@@ -6,14 +6,18 @@ import '../../../app/theme/theme.dart';
 /// solid band, looping seamlessly. Light text on whatever the parent
 /// paints behind it. Keep each item under ~40 characters.
 class JmTicker extends StatelessWidget {
-  const JmTicker({super.key, required this.items, this.height = 32});
+  const JmTicker({super.key, required this.items, this.height = 32, this.color = JmColors.navyText});
   final List<String> items;
   final double height;
+
+  /// Text colour — light by default for a navy band; pass `muted` on a
+  /// light one.
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
-    final text = context.type.meta.copyWith(color: JmColors.navyText, fontSize: 13);
+    final text = context.type.meta.copyWith(color: color, fontSize: 13);
     return SizedBox(
       height: height,
       child: _Marquee(
@@ -27,7 +31,7 @@ class JmTicker extends StatelessWidget {
               Container(
                 width: 4,
                 height: 4,
-                decoration: BoxDecoration(color: JmColors.navyText.withValues(alpha: .5), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: color.withValues(alpha: .5), shape: BoxShape.circle),
               ),
             ],
           ],

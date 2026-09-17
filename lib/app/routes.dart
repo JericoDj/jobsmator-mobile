@@ -13,11 +13,14 @@ abstract final class AppRoutes {
 
   // Shell · Home
   static const home = '/home';
+  static const schedule = '/home/schedule';
 
   // Shell · Jobs — the database, plus the search flow (guide §06 steps)
   static const jobs = '/jobs';
   static const jobPattern = '/jobs/:id';
   static String job(String id) => '/jobs/$id';
+  static const jobListPattern = '/jobs/list/:kind'; // all · matches · saved · applied · notApplied
+  static String jobList(String kind) => '/jobs/list/$kind';
   static const upload = '/find'; // step 1
   static const interests = '/find/interests'; // step 2
   static const sites = '/find/sites'; // step 3
@@ -51,6 +54,8 @@ abstract final class RouteNames {
   static const register = 'register';
   static const forgotPassword = 'forgot-password';
   static const home = 'home';
+  static const schedule = 'schedule';
+  static const jobList = 'job-list';
   static const jobs = 'jobs';
   static const job = 'job';
   static const upload = 'upload';

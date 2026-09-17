@@ -36,6 +36,13 @@ class RunProvider extends ChangeNotifier {
     }
   }
 
+  /// The bell dropdown was opened: whatever finished has been seen.
+  void markResultsSeen() {
+    if (!_unseenResult) return;
+    _unseenResult = false;
+    notifyListeners();
+  }
+
   Future<void> loadHistory() async {
     final res = await _api.get('/v1/runs');
     _history = (res['items'] as List).map((j) => Run.fromJson((j as Map).cast<String, dynamic>())).toList()

@@ -18,6 +18,8 @@ class CtaCard extends StatelessWidget {
     this.onSecondary,
     this.navy = true,
     this.facts = const [],
+    this.centered = false,
+    this.stat,
   });
 
   final String title, actionLabel;
@@ -31,16 +33,55 @@ class CtaCard extends StatelessWidget {
   /// Small icon + text pairs shown under the body ("Last run 6h ago").
   final List<(IconData, String)> facts;
 
+  /// Centre everything instead of the default left rag.
+  final bool centered;
+
+  /// A big number with a caption, shown above the title ("1", "credit
+  /// left today").
+  final (String value, String label)? stat;
+
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
     final fg = navy ? Colors.white : c.ink;
     final sub = navy ? JmColors.navyText : c.muted;
+    final align = centered ? TextAlign.center : TextAlign.start;
     return ClipRRect(
       borderRadius: JmRadius.lgR,
       child: Stack(
         children: [
-          Positioned.fill(child: ColoredBox(color: navy ? JmColors.navy : c.surface)),
+          Positioned.fill(child: ColoredBox(color: navy ? JmColors.navy : c.card)),
+          if (!navy) ...[
+            // Soft cobalt → sky wash in the corners, hairline edge: lifted
+            // but light.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(1.2, -1.2),
+                    radius: 1.2,
+                    colors: [c.ocean.withValues(alpha: .14), Colors.transparent],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-1.1, 1.4),
+                    radius: 1.0,
+                    colors: [c.sky.withValues(alpha: .12), Colors.transparent],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(borderRadius: JmRadius.lgR, border: Border.all(color: c.line)),
+              ),
+            ),
+          ],
           if (navy) ...[
             Positioned.fill(
               child: DecoratedBox(
@@ -68,22 +109,33 @@ class CtaCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(JmSpace.x4 + 2),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
               children: [
                 if (eyebrow != null) ...[
                   JmLabel(eyebrow!, color: navy ? const Color(0xFFFFE600) : c.oceanDeep),
                   const SizedBox(height: JmSpace.x2),
                 ],
-                Text(title, style: context.type.title.copyWith(color: fg, fontSize: 22)),
+                if (stat != null) ...[
+                  Text(stat!.$1, style: context.type.stat.copyWith(color: fg, fontSize: 44, height: 1)),
+                  const SizedBox(height: 2),
+                  Text(stat!.$2, style: context.type.meta.copyWith(color: sub, fontSize: 13)),
+                  const SizedBox(height: JmSpace.x3),
+                ],
+                Text(title, style: context.type.title.copyWith(color: fg, fontSize: 22), textAlign: align),
                 if (body != null) ...[
                   const SizedBox(height: 6),
-                  Text(body!, style: context.type.body.copyWith(color: sub, fontSize: 15, height: 1.45)),
+                  Text(
+                    body!,
+                    style: context.type.body.copyWith(color: sub, fontSize: 15, height: 1.45),
+                    textAlign: align,
+                  ),
                 ],
                 if (facts.isNotEmpty) ...[
                   const SizedBox(height: JmSpace.x3),
                   Wrap(
                     spacing: JmSpace.x4,
                     runSpacing: 6,
+                    alignment: centered ? WrapAlignment.center : WrapAlignment.start,
                     children: [
                       for (final (icon, text) in facts)
                         Row(
@@ -101,6 +153,7 @@ class CtaCard extends StatelessWidget {
                 Wrap(
                   spacing: JmSpace.x2,
                   runSpacing: JmSpace.x2,
+                  alignment: centered ? WrapAlignment.center : WrapAlignment.start,
                   children: [
                     PrimaryButton(label: actionLabel, icon: actionIcon, onPressed: onAction),
                     if (secondaryLabel != null)

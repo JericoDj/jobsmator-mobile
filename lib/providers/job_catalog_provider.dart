@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/api/api_client.dart';
+import '../core/api/mock_api_client.dart';
 import '../core/models/job.dart';
 
 enum JobFilter {
@@ -34,7 +35,33 @@ class JobCatalogProvider extends ChangeNotifier {
   String _query = '';
   JobFilter _filter = JobFilter.all;
 
+  List<Job> _feed = const [];
+  bool _feedLoading = false;
+
   List<Job> get all => _jobs;
+
+  /// The job board: a random sample of every listing in the database, not
+  /// scored for this user. Refreshed on demand.
+  List<Job> get feed => _feed;
+  bool get feedLoading => _feedLoading;
+
+  /// What the Jobs tab shows as the board: the real feed, or shuffled
+  /// fixture listings while that is empty so the section never sits blank.
+  List<Job> get board => _feed.isNotEmpty ? _feed : _sampleBoard;
+  bool get boardIsSample => _feed.isEmpty;
+  List<Job> _sampleBoard = fixtureJobs.map((j) => Job.fromJson(j)).toList()..shuffle();
+
+  Future<void> refreshBoard() async {
+    if (_feed.isEmpty) {
+      // Nothing real yet: reshuffle the sample so the button still does
+      // something visible, and retry the feed quietly.
+      _sampleBoard = _sampleBoard.toList()..shuffle();
+      notifyListeners();
+      await loadFeed().catchError((_) {});
+      return;
+    }
+    await loadFeed();
+  }
   bool get loading => _loading;
   bool get loaded => _loaded;
   String get query => _query;
@@ -43,6 +70,8 @@ class JobCatalogProvider extends ChangeNotifier {
   List<Job> get _live => _jobs.where((j) => !j.hidden).toList();
   int get newMatches => _live.where((j) => j.tier != Tier.skip && !j.applied).length;
   int get applied => _live.where((j) => j.applied).length;
+  int get responded => _live.where((j) => j.responded).length;
+  int get interviews => _live.where((j) => j.interview).length;
   int get savedCount => _live.where((j) => j.saved).length;
 
   /// Top matches not yet applied to, best first.
@@ -82,6 +111,18 @@ class JobCatalogProvider extends ChangeNotifier {
 
   Job? byId(String id) => _jobs.where((j) => j.id == id).firstOrNull;
 
+  Future<void> loadFeed({int limit = 12}) async {
+    _feedLoading = true;
+    notifyListeners();
+    try {
+      final res = await _api.get('/v1/jobs/feed', query: {'limit': '$limit'});
+      _feed = (res['items'] as List).map((j) => Job.fromJson((j as Map).cast<String, dynamic>())).toList();
+    } finally {
+      _feedLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> load() async {
     _loading = true;
     notifyListeners();
@@ -116,7 +157,11 @@ class JobCatalogProvider extends ChangeNotifier {
 
   Future<void> toggleSaved(Job job) => _toggle(job, 'save', (j, v) => j.copyWith(saved: v), job.saved);
   Future<void> toggleHidden(Job job) => _toggle(job, 'hide', (j, v) => j.copyWith(hidden: v), job.hidden);
-  Future<void> markApplied(Job job) => _toggle(job, 'apply', (j, v) => j.copyWith(applied: v), job.applied);
+  Future<void> markApplied(Job job) => _toggle(job, 'applied', (j, v) => j.copyWith(applied: v), job.applied);
+  Future<void> toggleResponded(Job job) =>
+      _toggle(job, 'responded', (j, v) => j.copyWith(responded: v), job.responded);
+  Future<void> toggleInterview(Job job) =>
+      _toggle(job, 'interview', (j, v) => j.copyWith(interview: v), job.interview);
 
   Future<void> _toggle(Job job, String action, Job Function(Job, bool) apply, bool before) async {
     _replace(apply(job, !before));

@@ -67,6 +67,52 @@ class PreferencesProvider extends ChangeNotifier {
     }
   }
 
+  /// Schedule a search. [hour]/[minute] are the user's local time; the
+  /// device's UTC offset goes along so the server fires at that wall clock.
+  Future<Automation> createAutomation({
+    required String resumeId,
+    required List<String> interests,
+    required List<String> sites,
+    required String frequency,
+    required int hour,
+    required int minute,
+    int? weekday,
+    String? name,
+  }) async {
+    final res = await _api.post(
+      '/v1/automations',
+      body: {
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+        'resumeId': resumeId,
+        'interests': interests,
+        'sites': sites,
+        'jobsPerSite': _defaults.jobsPerSite,
+        'frequency': frequency,
+        'hour': hour,
+        'minute': minute,
+        'weekday': ?weekday,
+        'tzOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+      },
+    );
+    final a = Automation.fromJson(res);
+    _automations = [a, ..._automations];
+    notifyListeners();
+    return a;
+  }
+
+  Future<void> deleteAutomation(Automation a) async {
+    final before = _automations;
+    _automations = [for (final x in _automations) if (x.id != a.id) x];
+    notifyListeners();
+    try {
+      await _api.delete('/v1/automations/${a.id}');
+    } catch (_) {
+      _automations = before;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> updateSettings(AutomationSettings next) async {
     final before = _settings;
     _settings = next;

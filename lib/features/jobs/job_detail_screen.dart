@@ -161,6 +161,29 @@ class JobDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
+          // Track what happened next — these feed the Activity numbers.
+          if (job.applied)
+            Padding(
+              padding: const EdgeInsets.only(bottom: JmSpace.x4),
+              child: Wrap(
+                spacing: JmSpace.x2,
+                runSpacing: JmSpace.x2,
+                children: [
+                  FilterChip(
+                    label: const Text('Got a response'),
+                    avatar: Icon(Icons.mark_email_read_outlined, size: 16, color: job.responded ? c.oceanDeep : c.muted),
+                    selected: job.responded,
+                    onSelected: (_) => catalog.toggleResponded(job).catchError((_) {}),
+                  ),
+                  FilterChip(
+                    label: const Text('Interview'),
+                    avatar: Icon(Icons.event_available_outlined, size: 16, color: job.interview ? c.oceanDeep : c.muted),
+                    selected: job.interview,
+                    onSelected: (_) => catalog.toggleInterview(job).catchError((_) {}),
+                  ),
+                ],
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

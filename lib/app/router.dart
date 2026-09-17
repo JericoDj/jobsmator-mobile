@@ -20,6 +20,8 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/history/history_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/home/job_list_screen.dart';
+import '../features/home/schedule_screen.dart';
 import '../features/jobs/job_detail_screen.dart';
 import '../features/jobs/jobs_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -98,6 +100,9 @@ GoRouter buildRouter(AuthProvider auth, OnboardingProvider onboarding) => GoRout
                 create: (ctx) => HomeController(ctx.read(), ctx.read(), ctx.read(), ctx.read()),
                 child: const HomeScreen(),
               ),
+              routes: [
+                GoRoute(path: 'schedule', name: RouteNames.schedule, builder: (_, _) => const ScheduleScreen()),
+              ],
             ),
           ],
         ),
@@ -109,6 +114,11 @@ GoRouter buildRouter(AuthProvider auth, OnboardingProvider onboarding) => GoRout
               name: RouteNames.jobs,
               builder: (_, _) => const JobsScreen(),
               routes: [
+                GoRoute(
+                  path: 'list/:kind',
+                  name: RouteNames.jobList,
+                  builder: (_, state) => JobListScreen(initial: JobListKind.parse(state.pathParameters['kind'])),
+                ),
                 GoRoute(
                   path: ':id',
                   name: RouteNames.job,

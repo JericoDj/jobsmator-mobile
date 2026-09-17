@@ -32,6 +32,8 @@ class Job {
     required this.saved,
     required this.hidden,
     required this.applied,
+    this.responded = false,
+    this.interview = false,
   });
 
   final String id;
@@ -39,6 +41,10 @@ class Job {
   final Tier tier;
   final String title, company, location, url, site, matchedInterest, why;
   final bool remote, saved, hidden, applied;
+
+  /// Application tracking after [applied]: the company replied; you had an
+  /// interview.
+  final bool responded, interview;
   final String? salary;
   final DateTime? postedAt;
   final List<String> redFlags;
@@ -62,9 +68,11 @@ class Job {
     saved: j['saved'] ?? false,
     hidden: j['hidden'] ?? false,
     applied: j['applied'] ?? false,
+    responded: j['responded'] ?? false,
+    interview: j['interview'] ?? false,
   );
 
-  Job copyWith({bool? saved, bool? hidden, bool? applied}) => Job(
+  Job copyWith({bool? saved, bool? hidden, bool? applied, bool? responded, bool? interview}) => Job(
     id: id,
     rank: rank,
     score: score,
@@ -83,5 +91,7 @@ class Job {
     saved: saved ?? this.saved,
     hidden: hidden ?? this.hidden,
     applied: applied ?? this.applied,
+    responded: responded ?? this.responded,
+    interview: interview ?? this.interview,
   );
 }
