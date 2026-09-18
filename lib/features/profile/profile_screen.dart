@@ -8,12 +8,16 @@ import '../../core/copy.dart';
 import '../../core/models/subscription.dart';
 import '../../core/models/user_defaults.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/job_catalog_provider.dart';
 import '../../providers/preferences_provider.dart';
 import '../../providers/resume_provider.dart';
+import '../../providers/run_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_page.dart';
 import '../auth/widgets/auth_scaffold.dart';
+import 'profile_stats.dart';
+import 'share_progress.dart';
 import 'widgets_rows.dart';
 
 /// Everything about the user's career profile and how JobsMator works for
@@ -36,6 +40,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!subs.loaded) subs.load().catchError((_) {});
       final resumes = context.read<ResumeProvider>();
       if (!resumes.loaded) resumes.load().catchError((_) {});
+      final runs = context.read<RunProvider>();
+      if (!runs.historyLoaded) runs.loadHistory().catchError((_) {});
     });
   }
 
@@ -45,11 +51,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = context.watch<PreferencesProvider>();
     final subs = context.watch<SubscriptionProvider>();
     final resume = context.watch<ResumeProvider>().latest;
+    final catalog = context.watch<JobCatalogProvider>();
+    final runs = context.watch<RunProvider>();
     final c = context.jm;
     final user = auth.user;
     final career = prefs.career;
     final d = prefs.defaults;
-    final salary = d.salaryMin == null ? 'No minimum' : '₱${_k(d.salaryMin!)}+ / month';
+    final salary = d.salaryMin == null
+        ? 'No minimum'
+        : '₱${_k(d.salaryMin!)}+ / month';
+
+    // Stats run on the live catalogue; the leaderboard is sample peers plus
+    // the user's own applied count until there's an endpoint for it.
+    final live = catalog.all.where((j) => !j.hidden).toList();
+    // Job has no applied-at yet, so "this week" is all applications for now.
+    final appliedThisWeek = catalog.applied;
+    final finishedRuns = runs.history.where((r) => r.isDone).toList();
+    final board = [
+      ...sampleLeaderboard,
+      LeaderboardEntry(
+        name: user?.firstName ?? 'You',
+        applied: appliedThisWeek,
+        isYou: true,
+      ),
+    ];
 
     return JmPage(
       maxWidth: JmLayout.results,
@@ -60,13 +85,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Identity + plan
           Container(
             padding: const EdgeInsets.all(JmSpace.x4),
-            decoration: BoxDecoration(color: c.surface, borderRadius: JmRadius.lgR),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: JmRadius.lgR,
+            ),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: c.oceanTint,
-                  foregroundImage: user?.photoUrl == null ? null : NetworkImage(user!.photoUrl!),
+                  foregroundImage: user?.photoUrl == null
+                      ? null
+                      : NetworkImage(user!.photoUrl!),
                   child: Text(
                     (user?.firstName ?? '?').characters.first.toUpperCase(),
                     style: context.type.heading.copyWith(color: c.oceanDeep),
@@ -77,9 +107,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(user?.displayName ?? user?.email ?? 'Signed in', style: context.type.uiStrong),
                       Text(
-                        career.headline.isEmpty ? (user?.email ?? '') : career.headline,
+                        user?.displayName ?? user?.email ?? 'Signed in',
+                        style: context.type.uiStrong,
+                      ),
+                      Text(
+                        career.headline.isEmpty
+                            ? (user?.email ?? '')
+                            : career.headline,
                         style: context.type.meta,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -88,10 +123,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _PlanPill(plan: subs.plan, onTap: () => context.push(AppRoutes.subscribe)),
+                _PlanPill(
+                  plan: subs.plan,
+                  onTap: () => context.push(AppRoutes.subscribe),
+                ),
               ],
             ),
           ),
+          const SizedBox(height: JmSpace.x6),
+
+          // Progress
+          Row(
+            children: [
+              Expanded(child: JmLabel('Your progress', color: c.muted)),
+              TextButton.icon(
+                onPressed: () => context.push(
+                  AppRoutes.shareProgress,
+                  extra: ProgressSnapshot(
+                    name: user?.firstName ?? 'My',
+                    searches: finishedRuns.length,
+                    jobs: live.length,
+                    applied: catalog.applied,
+                    interviews: catalog.interviews,
+                    streak: searchStreak(finishedRuns),
+                    applyRate: live.isEmpty ? 0 : catalog.applied / live.length,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+                icon: const Icon(Icons.ios_share_rounded, size: 16),
+                label: const Text('Share'),
+              ),
+            ],
+          ),
+          const SizedBox(height: JmSpace.x2),
+          ProfileStats(
+            searches: finishedRuns.length,
+            jobs: live.length,
+            applied: catalog.applied,
+            interviews: catalog.interviews,
+          ),
+          const SizedBox(height: JmSpace.x3),
+          StreakCard(
+            streak: searchStreak(finishedRuns),
+            appliedThisWeek: appliedThisWeek,
+          ),
+          const SizedBox(height: JmSpace.x6),
+          Leaderboard(entries: board, sample: true),
           const SizedBox(height: JmSpace.x8),
 
           SettingsGroup(
@@ -114,19 +194,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SettingsRow(
                 icon: Icons.psychology_outlined,
                 label: 'Skills',
-                value: career.skills.isEmpty ? '—' : JmCopy.plural(career.skills.length, 'skill'),
+                value: career.skills.isEmpty
+                    ? '—'
+                    : JmCopy.plural(career.skills.length, 'skill'),
                 onTap: () => context.push(AppRoutes.career),
               ),
               SettingsRow(
                 icon: Icons.work_outline_rounded,
                 label: 'Experience',
-                value: career.experience.isEmpty ? '—' : '${career.yearsExperience ?? career.experience.length} years',
+                value: career.experience.isEmpty
+                    ? '—'
+                    : '${career.yearsExperience ?? career.experience.length} years',
                 onTap: () => context.push(AppRoutes.career),
               ),
               SettingsRow(
                 icon: Icons.school_outlined,
                 label: 'Education',
-                value: career.education.isEmpty ? '—' : career.education.first.degree,
+                value: career.education.isEmpty
+                    ? '—'
+                    : career.education.first.degree,
                 onTap: () => context.push(AppRoutes.career),
               ),
             ],
@@ -139,7 +225,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SettingsRow(
                 icon: Icons.badge_outlined,
                 label: 'Roles',
-                value: d.interests.isEmpty ? 'None yet' : d.interests.join(', '),
+                value: d.interests.isEmpty
+                    ? 'None yet'
+                    : d.interests.join(', '),
                 onTap: () => context.go(AppRoutes.interests),
               ),
               SettingsRow(
@@ -157,13 +245,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SettingsRow(
                 icon: Icons.home_work_outlined,
                 label: 'Work setup',
-                value: d.workMode == WorkMode.any ? 'Remote, hybrid or on-site' : d.workMode.label,
+                value: d.workMode == WorkMode.any
+                    ? 'Remote, hybrid or on-site'
+                    : d.workMode.label,
                 onTap: () => context.push(AppRoutes.jobPreferences),
               ),
               SettingsRow(
                 icon: Icons.schedule_outlined,
                 label: 'Employment',
-                value: d.employmentType == EmploymentType.any ? 'Full-time or part-time' : d.employmentType.label,
+                value: d.employmentType == EmploymentType.any
+                    ? 'Full-time or part-time'
+                    : d.employmentType.label,
                 onTap: () => context.push(AppRoutes.jobPreferences),
               ),
             ],
@@ -236,7 +328,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: 'Search history',
                 onTap: () => context.push(AppRoutes.history),
               ),
-              SettingsRow(icon: Icons.mail_outline_rounded, label: 'Email', value: user?.email ?? '—'),
+              SettingsRow(
+                icon: Icons.mail_outline_rounded,
+                label: 'Email',
+                value: user?.email ?? '—',
+              ),
             ],
           ),
           const SizedBox(height: JmSpace.x8),
@@ -248,7 +344,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k' : '$n';
+  String _k(int n) => n >= 1000
+      ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k'
+      : '$n';
 }
 
 class _PlanPill extends StatelessWidget {

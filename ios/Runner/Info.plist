@@ -82,5 +82,11 @@
 	<string>JobsMator uses the microphone so you can dictate a question to the assistant.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>JobsMator turns your dictation into text for the assistant.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>JobsMator uses the camera to put your progress sticker on a photo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>JobsMator opens your photos so you can add your progress sticker to one.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>JobsMator saves your progress card to your photos.</string>
 </dict>
 </plist>

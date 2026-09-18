@@ -20,7 +20,7 @@ import '../shared/widgets/tab_header.dart';
 import 'job_list_screen.dart';
 
 /// Home is the product's promise in four rows, no copy needed:
-/// Search → Jobs → Matches → Activity.
+/// Search → Jobs → Matches.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -48,13 +48,13 @@ class HomeScreen extends StatelessWidget {
     final jobs = sample
         ? fixtureJobs.map((j) => Job.fromJson(j)).toList()
         : catalog.all.where((j) => !j.hidden).toList();
-    final newMatches = jobs
-        .where((j) => j.tier != Tier.skip && !j.applied)
-        .length;
-    final saved = jobs.where((j) => j.saved).length;
     final applied = jobs.where((j) => j.applied).length;
-    final responded = jobs.where((j) => j.responded).length;
-    final interviews = jobs.where((j) => j.interview).length;
+    final total = jobs.length;
+    final notApplied = total - applied;
+    final applyRate = total == 0 ? 0.0 : applied / total;
+    final avgScore = total == 0
+        ? 0.0
+        : jobs.fold<int>(0, (sum, j) => sum + j.score) / total / 100;
     final matches =
         (jobs.where((j) => j.tier == Tier.strong && !j.applied).toList()
               ..sort((a, b) => b.score.compareTo(a.score)))
@@ -72,7 +72,7 @@ class HomeScreen extends StatelessWidget {
             subtitle: 'Search less. Apply more.',
             trailing: const NotificationBell(),
           ),
-          const SizedBox(height: JmSpace.x6),
+          const SizedBox(height: JmSpace.x4),
 
           // 1 · Search
           _SearchCard(
@@ -88,44 +88,61 @@ class HomeScreen extends StatelessWidget {
             ),
             onSchedule: () => context.push(AppRoutes.schedule),
           ),
-          const SizedBox(height: JmSpace.x6),
+          const SizedBox(height: JmSpace.x2),
 
           // 2 · Jobs
-          SectionHeader(title: 'Your jobs', badge: sample ? 'Sample' : null),
-          const SizedBox(height: JmSpace.x3),
-          Row(
-            children: [
-              Expanded(
-                child: _Count(
-                  value: newMatches,
-                  label: 'New',
-                  color: c.match,
-                  onTap: () =>
-                      context.push(AppRoutes.jobList(JobListKind.matches.name)),
-                ),
-              ),
-              Expanded(
-                child: _Count(
-                  value: saved,
-                  label: 'Saved',
-                  color: c.ocean,
-                  onTap: () =>
-                      context.push(AppRoutes.jobList(JobListKind.saved.name)),
-                ),
-              ),
-              Expanded(
-                child: _Count(
-                  value: applied,
-                  label: 'Applied',
-                  color: c.sky,
-                  onTap: () =>
-                      context.push(AppRoutes.jobList(JobListKind.applied.name)),
-                ),
-              ),
-            ],
+          SectionHeader(
+            title: 'Your jobs',
+            badge: sample ? 'Sample' : null,
+            action: 'View all',
+            onAction: () => context.push(AppRoutes.history),
           ),
-          const SizedBox(height: JmSpace.x6),
-
+          const SizedBox(height: JmSpace.x3),
+          Container(
+            decoration: BoxDecoration(
+              color: c.card,
+              borderRadius: JmRadius.lgR,
+              border: Border.all(color: c.line),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _Count(
+                      value: total,
+                      label: 'Total jobs',
+                      color: c.ocean,
+                    ),
+                  ),
+                  VerticalDivider(width: 1, color: c.line),
+                  Expanded(
+                    child: _Count(
+                      value: applied,
+                      label: 'Applied',
+                      color: c.match,
+                    ),
+                  ),
+                  VerticalDivider(width: 1, color: c.line),
+                  Expanded(
+                    child: _Count(
+                      value: notApplied,
+                      label: 'Not applied',
+                      color: c.sky,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: JmSpace.x4),
+          _RateBar(label: 'Application rate', value: applyRate, color: c.ocean),
+          const SizedBox(height: JmSpace.x4),
+          _RateBar(
+            label: 'Average match score',
+            value: avgScore,
+            color: c.match,
+          ),
+          const SizedBox(height: JmSpace.x3),
           // 3 · Matches
           SectionHeader(
             title: 'Matches',
@@ -134,7 +151,7 @@ class HomeScreen extends StatelessWidget {
             onAction: () =>
                 context.push(AppRoutes.jobList(JobListKind.matches.name)),
           ),
-          const SizedBox(height: JmSpace.x3),
+          const SizedBox(height: JmSpace.x1),
           if (matches.isEmpty)
             _Empty(
               text: ctrl.hasResume
@@ -168,36 +185,6 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           const SizedBox(height: JmSpace.x6),
-
-          // 4 · Activity
-          SectionHeader(
-            title: 'Activity',
-            badge: sample ? 'Sample' : null,
-            action: 'History',
-            onAction: () => context.push(AppRoutes.history),
-          ),
-          const SizedBox(height: JmSpace.x3),
-          Row(
-            children: [
-              Expanded(
-                child: _Count(value: applied, label: 'Applied', color: c.ocean),
-              ),
-              Expanded(
-                child: _Count(
-                  value: responded,
-                  label: 'Responses',
-                  color: c.sky,
-                ),
-              ),
-              Expanded(
-                child: _Count(
-                  value: interviews,
-                  label: 'Interviews',
-                  color: c.match,
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: JmSpace.x6),
         ],
       ),
@@ -325,7 +312,7 @@ class _SearchCard extends StatelessWidget {
                         : '${left == 1 ? 'Search' : 'Searches'} left $period',
                     style: context.type.meta.copyWith(fontSize: 13),
                   ),
-                  const SizedBox(height: JmSpace.x3),
+                  const SizedBox(height: JmSpace.x1),
                   SizedBox(
                     width: 220,
                     child: PrimaryButton(
@@ -356,18 +343,12 @@ class _SearchCard extends StatelessWidget {
   }
 }
 
-/// Number over label, centred. Tappable when [onTap] is set.
+/// Number over label, centred.
 class _Count extends StatelessWidget {
-  const _Count({
-    required this.value,
-    required this.label,
-    required this.color,
-    this.onTap,
-  });
+  const _Count({required this.value, required this.label, required this.color});
   final int value;
   final String label;
   final Color color;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -399,11 +380,7 @@ class _Count extends StatelessWidget {
         ],
       ),
     );
-    if (onTap == null) return body;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(onTap: onTap, borderRadius: JmRadius.mdR, child: body),
-    );
+    return body;
   }
 }
 
@@ -443,6 +420,62 @@ class _MatchRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Label on the left, percentage on the right, a thin filled bar below.
+class _RateBar extends StatelessWidget {
+  const _RateBar({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  final String label;
+  final double value; // 0..1
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    final share = value.clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(label, style: context.type.ui.copyWith(fontSize: 14)),
+            ),
+            Text(
+              '${(share * 100).round()}%',
+              style: context.type.stat.copyWith(fontSize: 15, color: c.ink),
+            ),
+          ],
+        ),
+        const SizedBox(height: JmSpace.x2),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            height: 6,
+            child: Stack(
+              children: [
+                Positioned.fill(child: ColoredBox(color: c.surface2)),
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: share,
+                      heightFactor: 1,
+                      child: ColoredBox(color: color),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

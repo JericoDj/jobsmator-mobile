@@ -19,6 +19,7 @@ import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/history/history_screen.dart';
+import '../features/profile/share_progress.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/job_list_screen.dart';
 import '../features/home/schedule_screen.dart';
@@ -238,6 +239,11 @@ GoRouter buildRouter(AuthProvider auth, OnboardingProvider onboarding) => GoRout
         fullscreenDialog: true,
         child: ChangeNotifierProvider(create: (ctx) => SubscribeController(ctx.read()), child: const SubscribeScreen()),
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.shareProgress,
+      name: RouteNames.shareProgress,
+      builder: (_, state) => ShareProgressScreen(snap: state.extra as ProgressSnapshot),
     ),
   ],
   errorBuilder: (_, _) => const _NotFound(),

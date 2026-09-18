@@ -71,21 +71,21 @@ class _JobsScreenState extends State<JobsScreen> {
                 : 'Last search ${JmCopy.relative(lastRun.finishedAt ?? lastRun.startedAt)}',
             trailing: const NotificationBell(),
           ),
-          const SizedBox(height: JmSpace.x6),
+          const SizedBox(height: JmSpace.x4),
           _NumbersCard(
             total: catalog.all.where((j) => !j.hidden).length,
             newMatches: catalog.newMatches,
-            saved: catalog.savedCount,
             applied: catalog.applied,
+            notApplied: catalog.all.where((j) => !j.hidden && !j.applied).length,
             creditsLine: '${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.plan.periodLabel}',
             running: running,
             onNew: () => context.push(AppRoutes.jobList(JobListKind.matches.name)),
-            onSaved: () => context.push(AppRoutes.jobList(JobListKind.saved.name)),
             onApplied: () => context.push(AppRoutes.jobList(JobListKind.applied.name)),
+            onNotApplied: () => context.push(AppRoutes.jobList(JobListKind.notApplied.name)),
             onViewAll: () => context.push(AppRoutes.jobList(JobListKind.all.name)),
             onAutomation: () => context.push(AppRoutes.automation),
           ),
-          const SizedBox(height: JmSpace.x8),
+          const SizedBox(height: JmSpace.x2),
 
           // Job board — a random slice of everything in the database.
           SectionHeader(
@@ -94,7 +94,8 @@ class _JobsScreenState extends State<JobsScreen> {
             action: 'Shuffle',
             onAction: catalog.feedLoading ? null : catalog.refreshBoard,
           ),
-          const SizedBox(height: JmSpace.x3),
+          const SizedBox(height: JmSpace.x2),
+
           AnimatedOpacity(
             opacity: catalog.feedLoading ? .5 : 1,
             duration: JmMotion.enterExit,
@@ -103,37 +104,45 @@ class _JobsScreenState extends State<JobsScreen> {
                 for (final (i, job) in catalog.board.take(5).indexed) ...[
                   if (i > 0) const SizedBox(height: JmSpace.x2),
                   JobRow(job: job, dense: true, onTap: () => _openListing(job)),
+
+
                 ],
+                const SizedBox(height: JmSpace.x8),
+                const SizedBox(height: JmSpace.x3),
               ],
             ),
           ),
+
+
+
+
         ],
       ),
     );
   }
 }
 
-/// Three ring buttons (new, saved, applied) with the total in the middle
+/// Three ring buttons (new, applied, not applied) with the total in the middle
 /// of the copy, one credits line, and the two actions. Tapping a ring
 /// filters the list and scrolls to it.
 class _NumbersCard extends StatelessWidget {
   const _NumbersCard({
     required this.total,
     required this.newMatches,
-    required this.saved,
     required this.applied,
+    required this.notApplied,
     required this.creditsLine,
     required this.running,
     required this.onNew,
-    required this.onSaved,
     required this.onApplied,
+    required this.onNotApplied,
     required this.onViewAll,
     required this.onAutomation,
   });
-  final int total, newMatches, saved, applied;
+  final int total, newMatches, applied, notApplied;
   final String creditsLine;
   final bool running;
-  final VoidCallback onNew, onSaved, onApplied, onViewAll, onAutomation;
+  final VoidCallback onNew, onApplied, onNotApplied, onViewAll, onAutomation;
 
 
   @override
@@ -161,14 +170,15 @@ class _NumbersCard extends StatelessWidget {
           Row(
             children: [
               Expanded(child: _Ring(value: newMatches, total: total, label: 'New', color: c.match, onTap: onNew)),
-              Expanded(child: _Ring(value: saved, total: total, label: 'Saved', color: c.ocean, onTap: onSaved)),
-              Expanded(child: _Ring(value: applied, total: total, label: 'Applied', color: c.sky, onTap: onApplied)),
+              Expanded(child: _Ring(value: applied, total: total, label: 'Applied', color: c.ocean, onTap: onApplied)),
+              Expanded(child: _Ring(value: notApplied, total: total, label: 'Not applied', color: c.sky, onTap: onNotApplied)),
             ],
           ),
-          const SizedBox(height: JmSpace.x4),
-          PrimaryButton(label: 'My jobs', icon: Icons.work_outline_rounded, onPressed: onViewAll),
           const SizedBox(height: JmSpace.x2),
+          PrimaryButton(label: 'My jobs', icon: Icons.work_outline_rounded, onPressed: onViewAll),
+          const SizedBox(height: JmSpace.x1),
           SecondaryButton(label: 'Jobs automation', icon: Icons.bolt_rounded, onPressed: onAutomation),
+
         ],
       ),
     );
@@ -222,7 +232,9 @@ class _Ring extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(label, style: context.type.meta.copyWith(fontSize: 12, fontWeight: FontWeight.w600)),
+
             ],
+
           ),
         ),
       ),

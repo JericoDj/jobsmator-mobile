@@ -19,7 +19,8 @@ abstract final class AppRoutes {
   static const jobs = '/jobs';
   static const jobPattern = '/jobs/:id';
   static String job(String id) => '/jobs/$id';
-  static const jobListPattern = '/jobs/list/:kind'; // all · matches · saved · applied · notApplied
+  static const jobListPattern =
+      '/jobs/list/:kind'; // all · matches · saved · applied · notApplied
   static String jobList(String kind) => '/jobs/list/$kind';
   static const upload = '/find'; // step 1
   static const interests = '/find/interests'; // step 2
@@ -44,6 +45,7 @@ abstract final class AppRoutes {
 
   // Over the shell
   static const subscribe = '/subscribe';
+  static const shareProgress = '/share-progress';
 
   static const authRoutes = {login, register, forgotPassword};
 }
@@ -71,4 +73,5 @@ abstract final class RouteNames {
   static const automation = 'automation';
   static const history = 'history';
   static const subscribe = 'subscribe';
+  static const shareProgress = 'share-progress';
 }
