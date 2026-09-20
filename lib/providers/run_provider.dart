@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as dev;
 
 import 'package:flutter/foundation.dart';
 
@@ -7,6 +9,7 @@ import '../core/models/run.dart';
 
 /// Owns the current run and the polling timer (3 s until done or failed).
 class RunProvider extends ChangeNotifier {
+  void clear() { _historyLoaded = false; _history = const []; _current = null; _poll?.cancel(); _poll = null; notifyListeners(); }
   RunProvider(this._api);
 
   final ApiClient _api;
@@ -90,9 +93,15 @@ class RunProvider extends ChangeNotifier {
     Future<void> tick() async {
       try {
         final wasActive = _current?.isActive ?? true;
-        _current = Run.fromJson(await _api.get('/v1/runs/$runId'));
+        final json = await _api.get('/v1/runs/$runId');
+        _current = Run.fromJson(json);
         if (wasActive && !_current!.isActive) {
           _poll?.cancel();
+          // Full payload once, so the engine's numbers are inspectable
+          // without wading through every poll. dev.log doesn't truncate.
+          if (kDebugMode) {
+            dev.log(const JsonEncoder.withIndent('  ').convert(json), name: 'run ${_current!.status.name}');
+          }
           if (!_searchTabVisible) _unseenResult = true;
           if (_historyLoaded) loadHistory().catchError((_) {});
         }

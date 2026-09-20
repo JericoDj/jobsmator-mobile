@@ -39,20 +39,31 @@ class SitesScreen extends StatelessWidget {
 
     return JmPage(
       appBar: AppBar(leading: BackButton(onPressed: () => context.go(AppRoutes.interests))),
-      bottom: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (ctrl.error != null) ...[ErrorLine(ctrl.error!), const SizedBox(height: JmSpace.x3)],
-          PrimaryButton(
-            label: 'Find matching jobs',
-            busyLabel: 'Starting search…',
-            busy: ctrl.starting,
-            large: true,
-            icon: Icons.search_rounded,
-            onPressed: ctrl.canStart ? () => _start(context) : null,
+      bottom: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: JmSpace.x2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (ctrl.error != null) ...[ErrorLine(ctrl.error!), const SizedBox(height: JmSpace.x3)],
+              PrimaryButton(
+                label: 'Find matching jobs',
+                busyLabel: 'Starting search…',
+                busy: ctrl.starting,
+                large: true,
+                icon: Icons.search_rounded,
+                onPressed: ctrl.canStart ? () => _start(context) : null,
+              ),
+              const SizedBox(height: JmSpace.x2),
+              TextButton(
+                onPressed: () => context.go(AppRoutes.home),
+                child: Text('Skip for now', style: context.type.meta),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

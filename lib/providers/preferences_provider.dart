@@ -9,6 +9,7 @@ import '../core/models/user_defaults.dart';
 /// Search preferences — interests, sites and limits. Loaded from `/v1/me`,
 /// edited on the interests and sites screens, saved when a run starts.
 class PreferencesProvider extends ChangeNotifier {
+  void clear() { _loaded = false; _defaults = const UserDefaults(); _profile = null; _career = const CareerProfile(); _automations = const []; _settings = const AutomationSettings(); _sheetId = null; notifyListeners(); }
   PreferencesProvider(this._api);
 
   final ApiClient _api;
@@ -133,6 +134,10 @@ class PreferencesProvider extends ChangeNotifier {
     _update(_defaults.copyWith(interests: [...interests, v]));
     return true;
   }
+
+  /// Replaces the whole list, e.g. from the edit sheet's Save.
+  void setInterests(List<String> values) =>
+      _update(_defaults.copyWith(interests: values.take(maxInterests).toList()));
 
   void removeInterest(String value) =>
       _update(_defaults.copyWith(interests: interests.where((i) => i != value).toList()));

@@ -12,16 +12,18 @@ import '../shared/widgets/jm_page.dart';
 import '../shared/widgets/selection_chip.dart';
 import '../shared/widgets/step_header.dart';
 
-const _suggestions = [
+/// Common titles offered wherever interests are edited.
+const interestSuggestions = [
+  'Virtual Assistant',
+  'Developer',
   'Flutter Developer',
   'Mobile Engineer',
   'Frontend Developer',
   'Software Engineer',
   'Backend Developer',
-  'Full Stack Developer',
-  'React Developer',
-  'iOS Developer',
-  'Android Developer',
+  'Project Manager',
+  'Customer Service',
+  'Copywriter',
 ];
 
 /// Step 2. Pre-filled from saved defaults — the user edits, not types.
@@ -55,17 +57,34 @@ class _InterestsScreenState extends State<InterestsScreen> {
     final ctrl = context.watch<InterestsController>();
     final prefs = context.watch<PreferencesProvider>();
     final c = context.jm;
-    final suggestions = _suggestions
+    final suggestions = interestSuggestions
         .where((s) => !prefs.interests.any((i) => i.toLowerCase() == s.toLowerCase()))
         .take(6);
 
     return JmPage(
       appBar: AppBar(leading: BackButton(onPressed: () => context.go(AppRoutes.upload))),
-      bottom: PrimaryButton(
-        label: 'Next: choose job sites',
-        large: true,
-        icon: Icons.arrow_forward_rounded,
-        onPressed: ctrl.canContinue ? () => context.go(AppRoutes.sites) : null,
+      bottom: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: JmSpace.x2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PrimaryButton(
+                label: 'Next: choose job sites',
+                large: true,
+                icon: Icons.arrow_forward_rounded,
+                onPressed: ctrl.canContinue ? () => context.go(AppRoutes.sites) : null,
+              ),
+              const SizedBox(height: JmSpace.x2),
+              TextButton(
+                onPressed: () => context.go(AppRoutes.home),
+                child: Text('Skip for now', style: context.type.meta),
+              ),
+            ],
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

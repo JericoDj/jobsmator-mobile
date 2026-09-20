@@ -49,7 +49,7 @@ class HttpApiClient implements ApiClient {
         },
       ),
     );
-    if (kDebugMode) _dio.interceptors.add(LogInterceptor(requestBody: false, responseBody: false));
+    if (kDebugMode) _dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true));
   }
 
   final Dio _dio;

@@ -1,5 +1,5 @@
 /// Plans. Limits are what the app enforces for UX; the API's rate limit
-/// (5 runs / hour) is the hard ceiling either way.
+/// (100 runs / hour) is the hard ceiling either way.
 enum Plan {
   free,
   pro;
@@ -12,7 +12,7 @@ enum Plan {
   /// Searches allowed per period.
   int get searchLimit => switch (this) {
     free => 1,
-    pro => 5,
+    pro => 100,
   };
   String get period => switch (this) {
     free => 'day',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/theme/theme.dart';
 import '../../../core/copy.dart';
@@ -137,6 +138,19 @@ class JobCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
                 child: const Text('Hide'),
+              ),
+              IconButton(
+                onPressed: () {
+                  
+                  Clipboard.setData(ClipboardData(text: job.url));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Link copied'),
+                    behavior: SnackBarBehavior.floating,
+                    duration: Duration(seconds: 2),
+                  ));
+                },
+                icon: const Icon(Icons.link_rounded, size: 20),
+                tooltip: 'Copy link',
               ),
             ],
           ),

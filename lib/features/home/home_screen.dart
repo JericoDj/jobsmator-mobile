@@ -5,12 +5,13 @@ import 'package:provider/provider.dart';
 import '../../app/routes.dart';
 import '../../app/theme/theme.dart';
 import '../../controllers/home_controller.dart';
-import '../../core/api/mock_api_client.dart';
 import '../../core/copy.dart';
 import '../../core/models/job.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/job_catalog_provider.dart';
 import '../../providers/preferences_provider.dart';
+import '../../providers/resume_provider.dart';
+
 import '../../providers/run_provider.dart';
 import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_page.dart';
@@ -21,7 +22,36 @@ import 'job_list_screen.dart';
 
 /// Home is the product's promise in four rows, no copy needed:
 /// Search → Jobs → Matches.
+
+class OnboardingCheck extends StatefulWidget {
+  final Widget child;
+  const OnboardingCheck({super.key, required this.child});
+  @override
+  State<OnboardingCheck> createState() => _OnboardingCheckState();
+}
+
+class _OnboardingCheckState extends State<OnboardingCheck> {
+  bool _checked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<PreferencesProvider>();
+    final resumes = context.watch<ResumeProvider>();
+
+    if (!_checked && prefs.loaded && resumes.loaded) {
+      _checked = true;
+      if (prefs.interests.isEmpty || resumes.latest == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go(AppRoutes.upload);
+        });
+      }
+    }
+    return widget.child;
+  }
+}
+
 class HomeScreen extends StatelessWidget {
+
   const HomeScreen({super.key});
 
   String _greeting() {
@@ -42,12 +72,7 @@ class HomeScreen extends StatelessWidget {
     final user = context.watch<AuthProvider>().user;
     final c = context.jm;
 
-    // Until the catalogue has anything real, every row runs on the fixture
-    // jobs and says so — the layout should never sit empty.
-    final sample = catalog.all.isEmpty;
-    final jobs = sample
-        ? fixtureJobs.map((j) => Job.fromJson(j)).toList()
-        : catalog.all.where((j) => !j.hidden).toList();
+        final jobs = catalog.all.where((j) => !j.hidden).toList();
     final applied = jobs.where((j) => j.applied).length;
     final total = jobs.length;
     final notApplied = total - applied;
@@ -61,7 +86,8 @@ class HomeScreen extends StatelessWidget {
             .take(3)
             .toList();
 
-    return JmPage(
+    return OnboardingCheck(
+      child: JmPage(
       maxWidth: JmLayout.results,
       padding: JmPage.tabPadding(context),
       child: Column(
@@ -93,7 +119,7 @@ class HomeScreen extends StatelessWidget {
           // 2 · Jobs
           SectionHeader(
             title: 'Your jobs',
-            badge: sample ? 'Sample' : null,
+            
             action: 'View all',
             onAction: () => context.push(AppRoutes.history),
           ),
@@ -146,7 +172,7 @@ class HomeScreen extends StatelessWidget {
           // 3 · Matches
           SectionHeader(
             title: 'Matches',
-            badge: sample ? 'Sample' : null,
+            
             action: 'See all',
             onAction: () =>
                 context.push(AppRoutes.jobList(JobListKind.matches.name)),
@@ -176,9 +202,7 @@ class HomeScreen extends StatelessWidget {
                     _MatchRow(
                       job: job,
                       // Sample rows have nothing to open; real ones go to the job.
-                      onTap: sample
-                          ? null
-                          : () => context.push(AppRoutes.job(job.id)),
+                      onTap: () => context.push(AppRoutes.job(job.id)),
                     ),
                   ],
                 ],
@@ -188,7 +212,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: JmSpace.x6),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -393,7 +417,7 @@ class _MatchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
-    final color = job.score >= 80 ? c.matchDeep : c.oceanDeep;
+    final color = job.score >= 70 ? c.matchDeep : c.oceanDeep;
     return InkWell(
       onTap: onTap,
       child: Padding(

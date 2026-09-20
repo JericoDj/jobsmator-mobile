@@ -55,3 +55,6 @@ firebase.json
 .env
 .env.*
 !.env.example
+*.override.json
+*.secret.json
+

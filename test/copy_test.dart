@@ -11,9 +11,11 @@ void main() {
   });
 
   test('headline and weaker link never say skip', () {
-    expect(JmCopy.resultsHeadline(14, 'Flutter Developer'), '14 strong matches for Flutter Developer');
-    expect(JmCopy.resultsHeadline(1, 'QA'), '1 strong match for QA');
-    expect(JmCopy.resultsHeadline(0, 'QA'), 'No strong matches yet');
+    expect(JmCopy.resultsHeadline(14, 0, 'Flutter Developer'), '14 strong matches for Flutter Developer');
+    expect(JmCopy.resultsHeadline(1, 0, 'QA'), '1 strong match for QA');
+    expect(JmCopy.resultsHeadline(0, 0, 'QA'), 'No matches yet');
+    expect(JmCopy.resultsHeadline(0, 12, 'QA'), '12 good matches for QA');
+    expect(JmCopy.resultsHeadline(0, 1, 'QA'), '1 good match for QA');
     expect(JmCopy.weakerLink(12), 'Show 12 weaker matches');
     expect(JmCopy.weakerLink(1), 'Show 1 weaker match');
   });

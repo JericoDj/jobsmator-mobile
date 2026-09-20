@@ -42,7 +42,7 @@ class PrimaryButton extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 ),
                 const SizedBox(width: 10),
-                Text(busyLabel ?? label),
+                Flexible(child: Text(busyLabel ?? label, overflow: TextOverflow.ellipsis)),
               ],
             )
           : Row(
@@ -50,7 +50,7 @@ class PrimaryButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
-                Text(label),
+                Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
               ],
             ),
     );
@@ -72,7 +72,7 @@ class SecondaryButton extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
-        Text(label),
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
       ],
     ),
   );

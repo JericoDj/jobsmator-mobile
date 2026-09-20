@@ -25,6 +25,13 @@ enum JobFilter {
 /// Every job JobsMator has found for this user, across runs — the job
 /// database behind the Jobs tab and the Home recommendations.
 class JobCatalogProvider extends ChangeNotifier {
+  void clear() {
+    _loaded = false;
+    _jobs = const [];
+    _feed = const [];
+    notifyListeners();
+  }
+
   JobCatalogProvider(this._api);
 
   final ApiClient _api;
@@ -49,7 +56,8 @@ class JobCatalogProvider extends ChangeNotifier {
   /// fixture listings while that is empty so the section never sits blank.
   List<Job> get board => _feed.isNotEmpty ? _feed : _sampleBoard;
   bool get boardIsSample => _feed.isEmpty;
-  List<Job> _sampleBoard = fixtureJobs.map((j) => Job.fromJson(j)).toList()..shuffle();
+  List<Job> _sampleBoard = fixtureJobs.map((j) => Job.fromJson(j)).toList()
+    ..shuffle();
 
   Future<void> refreshBoard() async {
     if (_feed.isEmpty) {
@@ -60,15 +68,17 @@ class JobCatalogProvider extends ChangeNotifier {
       await loadFeed().catchError((_) {});
       return;
     }
-    await loadFeed();
+    await shuffleBoard();
   }
+
   bool get loading => _loading;
   bool get loaded => _loaded;
   String get query => _query;
   JobFilter get filter => _filter;
 
   List<Job> get _live => _jobs.where((j) => !j.hidden).toList();
-  int get newMatches => _live.where((j) => j.tier != Tier.skip && !j.applied).length;
+  int get newMatches =>
+      _live.where((j) => j.tier != Tier.skip && !j.applied).length;
   int get applied => _live.where((j) => j.applied).length;
   int get responded => _live.where((j) => j.responded).length;
   int get interviews => _live.where((j) => j.interview).length;
@@ -76,7 +86,8 @@ class JobCatalogProvider extends ChangeNotifier {
 
   /// Top matches not yet applied to, best first.
   List<Job> recommended({int limit = 3}) =>
-      (_live.where((j) => j.tier == Tier.strong && !j.applied).toList()..sort((a, b) => b.score.compareTo(a.score)))
+      (_live.where((j) => j.tier == Tier.strong && !j.applied).toList()
+            ..sort((a, b) => b.score.compareTo(a.score)))
           .take(limit)
           .toList();
 
@@ -109,14 +120,35 @@ class JobCatalogProvider extends ChangeNotifier {
     return n;
   }
 
-  Job? byId(String id) => _jobs.where((j) => j.id == id).firstOrNull;
+  /// Own jobs first, then the board — opening a board row must not 404.
+  Job? byId(String id) =>
+      _jobs.where((j) => j.id == id).firstOrNull ??
+      _feed.where((j) => j.id == id).firstOrNull;
 
-  Future<void> loadFeed({int limit = 12}) async {
+  /// Reshuffles left today; null until the board has loaded.
+  int? get shufflesLeft => _shufflesLeft;
+  int? _shufflesLeft;
+
+  Future<void> loadFeed({int limit = 12}) =>
+      _fetchBoard(limit: limit, shuffle: false);
+
+  /// Redraws today's board. Throws [ApiException] `too_many_shuffles` once
+  /// the daily allowance is used up.
+  Future<void> shuffleBoard({int limit = 12}) =>
+      _fetchBoard(limit: limit, shuffle: true);
+
+  Future<void> _fetchBoard({required int limit, required bool shuffle}) async {
     _feedLoading = true;
     notifyListeners();
     try {
-      final res = await _api.get('/v1/jobs/feed', query: {'limit': '$limit'});
-      _feed = (res['items'] as List).map((j) => Job.fromJson((j as Map).cast<String, dynamic>())).toList();
+      final q = {'limit': '$limit'};
+      final res = shuffle
+          ? await _api.post('/v1/jobs/feed/shuffle?limit=$limit')
+          : await _api.get('/v1/jobs/feed', query: q);
+      _feed = (res['items'] as List)
+          .map((j) => Job.fromJson((j as Map).cast<String, dynamic>()))
+          .toList();
+      _shufflesLeft = res['shufflesLeft'] as int?;
     } finally {
       _feedLoading = false;
       notifyListeners();
@@ -128,10 +160,47 @@ class JobCatalogProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final res = await _api.get('/v1/jobs');
-      _jobs = (res['items'] as List).map((j) => Job.fromJson((j as Map).cast<String, dynamic>())).toList();
+      _jobs = (res['items'] as List)
+          .map((j) => Job.fromJson((j as Map).cast<String, dynamic>()))
+          .toList();
       _loaded = true;
     } finally {
       _loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Scores (or re-analyses) a job for 1 credit. A job the user already has
+  /// comes back with the same id and replaces its row; a board job is added.
+  Future<Job> scoreJob(String id, {String? resumeId}) async {
+    final res = await _api.post('/v1/jobs/$id/score', body: resumeId != null ? {'resumeId': resumeId} : null);
+    final job = Job.fromJson(res);
+    _jobs = _jobs.any((j) => j.id == job.id)
+        ? [for (final j in _jobs) j.id == job.id ? job : j]
+        : [..._jobs, job];
+    notifyListeners();
+    return job;
+  }
+
+  Future<Job> generateCoverLetter(String id, {String? resumeId}) async {
+    final res = await _api.post('/v1/jobs/$id/cover-letter/generate', body: resumeId != null ? {'resumeId': resumeId} : null);
+    final coverLetter = res['coverLetter'] as String;
+    final cached = byId(id);
+    if (cached != null) {
+      final updated = cached.copyWith(coverLetter: coverLetter);
+      _jobs = [for (final j in _jobs) j.id == id ? updated : j];
+      notifyListeners();
+      return updated;
+    }
+    return fetch(id).then((j) => j!);
+  }
+
+  Future<void> updateCoverLetter(String id, String text) async {
+    await _api.patch('/v1/jobs/$id/cover-letter', body: {'coverLetter': text});
+    final cached = byId(id);
+    if (cached != null) {
+      final updated = cached.copyWith(coverLetter: text);
+      _jobs = [for (final j in _jobs) j.id == id ? updated : j];
       notifyListeners();
     }
   }
@@ -155,15 +224,31 @@ class JobCatalogProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleSaved(Job job) => _toggle(job, 'save', (j, v) => j.copyWith(saved: v), job.saved);
-  Future<void> toggleHidden(Job job) => _toggle(job, 'hide', (j, v) => j.copyWith(hidden: v), job.hidden);
-  Future<void> markApplied(Job job) => _toggle(job, 'applied', (j, v) => j.copyWith(applied: v), job.applied);
-  Future<void> toggleResponded(Job job) =>
-      _toggle(job, 'responded', (j, v) => j.copyWith(responded: v), job.responded);
-  Future<void> toggleInterview(Job job) =>
-      _toggle(job, 'interview', (j, v) => j.copyWith(interview: v), job.interview);
+  Future<void> toggleSaved(Job job) =>
+      _toggle(job, 'save', (j, v) => j.copyWith(saved: v), job.saved);
+  Future<void> toggleHidden(Job job) =>
+      _toggle(job, 'hide', (j, v) => j.copyWith(hidden: v), job.hidden);
+  Future<void> markApplied(Job job) =>
+      _toggle(job, 'applied', (j, v) => j.copyWith(applied: v), job.applied);
+  Future<void> toggleResponded(Job job) => _toggle(
+    job,
+    'responded',
+    (j, v) => j.copyWith(responded: v),
+    job.responded,
+  );
+  Future<void> toggleInterview(Job job) => _toggle(
+    job,
+    'interview',
+    (j, v) => j.copyWith(interview: v),
+    job.interview,
+  );
 
-  Future<void> _toggle(Job job, String action, Job Function(Job, bool) apply, bool before) async {
+  Future<void> _toggle(
+    Job job,
+    String action,
+    Job Function(Job, bool) apply,
+    bool before,
+  ) async {
     _replace(apply(job, !before));
     try {
       await _api.post('/v1/jobs/${job.id}/$action');

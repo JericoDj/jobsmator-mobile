@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,12 +9,14 @@ import '../../app/theme/theme.dart';
 import '../../controllers/results_controller.dart';
 import '../../core/copy.dart';
 import '../../core/models/job.dart';
+import '../../core/models/tool.dart';
 import '../../providers/jobs_provider.dart';
 import '../shared/widgets/badges.dart';
 import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_logo_mark.dart';
 import '../shared/widgets/jm_page.dart';
 import '../shared/widgets/jm_toast.dart';
+import '../shared/widgets/section_header.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/job_card.dart';
 import 'widgets/search_progress.dart';
@@ -26,7 +29,10 @@ class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key});
 
   Future<void> _open(BuildContext context, Job job) async {
-    final ok = await launchUrl(Uri.parse(job.url), mode: LaunchMode.externalApplication);
+    final ok = await launchUrl(
+      Uri.parse(job.url),
+      mode: LaunchMode.externalApplication,
+    );
     if (!ok && context.mounted) {
       showJmToast(
         context,
@@ -42,17 +48,27 @@ class ResultsScreen extends StatelessWidget {
     final sheet = await ctrl.exportToSheet();
     if (!context.mounted) return;
     if (sheet == null) {
-      showJmToast(context, title: "Couldn't save to Google Sheets", body: ctrl.exportError, tone: ToastTone.error);
+      showJmToast(
+        context,
+        title: "Couldn't save to Google Sheets",
+        body: ctrl.exportError,
+        tone: ToastTone.error,
+      );
       return;
     }
     final url = sheet.url;
     showJmToast(
       context,
       title: 'Saved to Google Sheets',
-      body: sheet.rowsAdded == null ? null : '${JmCopy.plural(sheet.rowsAdded!, 'job')} added.',
+      body: sheet.rowsAdded == null
+          ? null
+          : '${JmCopy.plural(sheet.rowsAdded!, 'job')} added.',
       tone: ToastTone.success,
       actionLabel: url == null ? null : 'Open sheet',
-      onAction: url == null ? null : () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      onAction: url == null
+          ? null
+          : () =>
+                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
     );
   }
 
@@ -72,7 +88,11 @@ class ResultsScreen extends StatelessWidget {
             tooltip: 'Save to Google Sheets',
             onPressed: ctrl.exporting ? null : () => _export(context),
             icon: ctrl.exporting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.table_chart_outlined),
           ),
         const SizedBox(width: 4),
@@ -98,7 +118,10 @@ class ResultsScreen extends StatelessWidget {
           icon: Icons.cloud_off_rounded,
           title: "That search didn't finish",
           body: ctrl.failureMessage,
-          action: SecondaryButton(label: 'Change sites', onPressed: () => context.go(AppRoutes.sites)),
+          action: SecondaryButton(
+            label: 'Change sites',
+            onPressed: () => context.go(AppRoutes.sites),
+          ),
         ),
       );
     }
@@ -113,7 +136,8 @@ class ResultsScreen extends StatelessWidget {
 
     final visible = jobs.visible;
     final interests = run?.request.interests ?? const <String>[];
-    final showWeakerLink = jobs.filter == null && !jobs.showWeaker && jobs.weakerCount > 0;
+    final showWeakerLink =
+        jobs.filter == null && !jobs.showWeaker && jobs.weakerCount > 0;
 
     return JmPage(
       appBar: appBar,
@@ -122,7 +146,10 @@ class ResultsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: JmSpace.x2),
-          Text(ctrl.headline, style: context.type.display.copyWith(fontSize: 28)),
+          Text(
+            ctrl.headline,
+            style: context.type.display.copyWith(fontSize: 28),
+          ),
           const SizedBox(height: JmSpace.x2),
           Text(
             '${JmCopy.plural(run?.stats?.scored ?? jobs.all.length, 'listing')} scored across '
@@ -139,12 +166,19 @@ class ResultsScreen extends StatelessWidget {
             onTier: ctrl.filter,
           ),
           const SizedBox(height: JmSpace.x6),
+          if (run?.stats?.feedback != null) ...[
+            _FeedbackCard(text: run!.stats!.feedback!),
+            const SizedBox(height: JmSpace.x6),
+          ],
           if (jobs.filter != null)
             Padding(
               padding: const EdgeInsets.only(bottom: JmSpace.x3),
               child: Row(
                 children: [
-                  TierBadge(tier: jobs.filter!, count: jobs.countOf(jobs.filter!)),
+                  TierBadge(
+                    tier: jobs.filter!,
+                    count: jobs.countOf(jobs.filter!),
+                  ),
                   const SizedBox(width: 8),
                   TextButton(
                     onPressed: () => ctrl.filter(null),
@@ -161,26 +195,22 @@ class ResultsScreen extends StatelessWidget {
             jobs.strongCount == 0 && jobs.filter == null && jobs.goodCount == 0
                 ? EmptyState(
                     title: 'No matches this time',
-                    body: 'Adding another interest or lowering the minimum score usually helps.',
-                    action: SecondaryButton(label: 'Edit interests', onPressed: () => context.go(AppRoutes.interests)),
+                    body:
+                        'Adding another interest or lowering the minimum score usually helps.',
+                    action: SecondaryButton(
+                      label: 'Edit interests',
+                      onPressed: () => context.go(AppRoutes.interests),
+                    ),
                   )
                 : EmptyState(
                     title: 'Nothing in this tier',
                     body: 'Tap the tile again to show every match.',
-                    action: SecondaryButton(label: 'Show all', onPressed: () => ctrl.filter(null)),
+                    action: SecondaryButton(
+                      label: 'Show all',
+                      onPressed: () => ctrl.filter(null),
+                    ),
                   )
           else ...[
-            if (jobs.strongCount == 0 && jobs.filter == null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: JmSpace.x4),
-                child: EmptyState(
-                  title: 'No strong matches yet',
-                  body:
-                      '${JmCopy.plural(jobs.goodCount, 'good match', 'good matches')} below. '
-                      'Adding another interest or lowering the minimum score usually helps.',
-                  action: SecondaryButton(label: 'Edit interests', onPressed: () => context.go(AppRoutes.interests)),
-                ),
-              ),
             for (final (i, job) in visible.indexed) ...[
               if (i > 0) const SizedBox(height: JmSpace.x3),
               StaggeredEntry(
@@ -224,9 +254,212 @@ class ResultsScreen extends StatelessWidget {
           ],
           if (jobs.hiddenCount > 0) ...[
             const SizedBox(height: JmSpace.x4),
-            Center(child: Text('${JmCopy.plural(jobs.hiddenCount, 'job')} hidden', style: context.type.meta)),
+            Center(
+              child: Text(
+                '${JmCopy.plural(jobs.hiddenCount, 'job')} hidden',
+                style: context.type.meta,
+              ),
+            ),
           ],
           const SizedBox(height: JmSpace.x6),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the engine thinks of the resume against these interests. Two lines
+/// on the page; the full text and the tools that act on it live in a sheet.
+/// The text is stored on the run, so reopening it from History shows it too.
+class _FeedbackCard extends StatelessWidget {
+  const _FeedbackCard({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return Material(
+      color: c.oceanTint.withValues(alpha: .45),
+      borderRadius: JmRadius.lgR,
+      child: InkWell(
+        borderRadius: JmRadius.lgR,
+        onTap: () => _showFeedbackSheet(context, text),
+        child: Container(
+          padding: const EdgeInsets.all(JmSpace.x4),
+          decoration: BoxDecoration(
+            borderRadius: JmRadius.lgR,
+            border: Border.all(color: c.ocean.withValues(alpha: .25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 16,
+                    color: c.oceanDeep,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Resume feedback',
+                    style: context.type.label.copyWith(color: c.oceanDeep),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Read more',
+                    style: context.type.meta.copyWith(
+                      color: c.oceanDeep,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: c.oceanDeep,
+                  ),
+                ],
+              ),
+              const SizedBox(height: JmSpace.x2),
+              Text(
+                text,
+                style: context.type.body.copyWith(fontSize: 14.5),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _showFeedbackSheet(BuildContext context, String text) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: context.jm.ground,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _FeedbackSheet(text: text),
+  );
+}
+
+class _FeedbackSheet extends StatelessWidget {
+  const _FeedbackSheet({required this.text});
+  final String text;
+
+  // The tools that act on this advice, in the order a user would reach for them.
+  static const _toolIds = ['resume-analyzer', 'resume-builder', 'job-match'];
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .6,
+      maxChildSize: .92,
+      builder: (context, scroll) => ListView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(
+          JmSpace.x4,
+          JmSpace.x3,
+          JmSpace.x4,
+          JmSpace.x6,
+        ),
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 18, color: c.oceanDeep),
+              const SizedBox(width: 8),
+              Text('Resume feedback', style: context.type.heading),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Copy',
+                icon: const Icon(Icons.copy_rounded, size: 18),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: text));
+                  showJmToast(
+                    context,
+                    title: 'Copied',
+                    tone: ToastTone.success,
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: JmSpace.x3),
+          Text(
+            text,
+            style: context.type.body.copyWith(fontSize: 15, height: 1.5),
+          ),
+          const SizedBox(height: JmSpace.x6),
+          JmLabel('Tools that can help', color: c.muted),
+          const SizedBox(height: JmSpace.x2),
+          Container(
+            decoration: BoxDecoration(
+              color: c.card,
+              borderRadius: JmRadius.lgR,
+              border: Border.all(color: c.line),
+            ),
+            child: Column(
+              children: [
+                for (final (i, id) in _toolIds.indexed)
+                  if (toolById(id) case final tool?) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        indent: 14,
+                        endIndent: 14,
+                        color: c.line,
+                      ),
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        context.push(AppRoutes.tool(tool.id));
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                        child: Row(
+                          children: [
+                            Icon(tool.icon, size: 20, color: c.oceanDeep),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        tool.title,
+                                        style: context.type.uiStrong,
+                                      ),
+                                      if (tool.premium) ...[
+                                        const SizedBox(width: 6),
+                                        const JmBadge('Pro'),
+                                      ],
+                                    ],
+                                  ),
+                                  Text(tool.blurb, style: context.type.meta),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 20,
+                              color: c.faint,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+              ],
+            ),
+          ),
         ],
       ),
     );

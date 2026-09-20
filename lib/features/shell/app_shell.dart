@@ -8,6 +8,8 @@ import '../../providers/run_provider.dart';
 import '../../providers/subscription_provider.dart';
 import 'announcement_bar.dart';
 
+import 'dart:math' as math;
+
 /// The tab shell: Home · Jobs · AI · Tools · Profile. The bar is ground +
 /// hairline — no elevation, no tint — and the only decoration is the Volt
 /// unread dot on Jobs when a search finishes off-screen (guide §02, Volt).
@@ -48,12 +50,30 @@ class _AppShellState extends State<AppShell> {
     final unseen = context.select<RunProvider, bool>((r) => r.unseenResult);
     final isPro = context.select<SubscriptionProvider, bool>((s) => s.isPro);
     final index = widget.navigationShell.currentIndex;
-    // Free users get a floating "Get full access" pill above the bar on
     // every tab except AI, whose composer already owns that edge.
-    final showPill = !isPro && index != AppShell.aiTab;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final showPill = !isPro && index != AppShell.aiTab && !keyboardOpen;
     final mq = MediaQuery.of(context);
 
+    // JmBottomNav is 50px + bottom safe area.
+    final bottomNavHeight = 50.0 + mq.padding.bottom;
+    // The inner scaffold only needs to shrink by the portion of the keyboard
+    // that overlaps the navigation shell.
+    final adjustedBottomInset = math.max(0.0, mq.viewInsets.bottom - bottomNavHeight);
+
+    // If the current screen has a JmBottomBar, we float the pill higher so it
+    // doesn't cover the primary action button.
+    final String loc = GoRouterState.of(context).matchedLocation;
+    final bool hasBottomBar = loc == AppRoutes.schedule ||
+        loc == AppRoutes.upload ||
+        loc == AppRoutes.interests ||
+        loc == AppRoutes.sites ||
+        loc.startsWith('/tools/') ||
+        loc == AppRoutes.jobPreferences ||
+        loc == AppRoutes.career;
+
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       // The announcement bar owns the top inset and the tab bar owns the
       // home-indicator inset, so the tabs must pad for neither — content
       // runs right down to the bar and the pill simply floats over it.
@@ -68,6 +88,7 @@ class _AppShellState extends State<AppShell> {
                     data: mq.copyWith(
                       padding: mq.padding.copyWith(top: 0, bottom: 0),
                       viewPadding: mq.viewPadding.copyWith(top: 0, bottom: 0),
+                      viewInsets: mq.viewInsets.copyWith(bottom: adjustedBottomInset),
                     ),
                     child: widget.navigationShell,
                   ),
@@ -76,7 +97,7 @@ class _AppShellState extends State<AppShell> {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: JmSpace.x3,
+                    bottom: hasBottomBar ? 96 : JmSpace.x3,
                     child: Center(child: _UpgradePill(onTap: () => context.push(AppRoutes.subscribe))),
                   ),
               ],

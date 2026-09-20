@@ -15,16 +15,23 @@ Then in `lib/main.dart` switch `Firebase.initializeApp()` to use `DefaultFirebas
 
 ## Run
 
+Run using environment JSON files via `--dart-define-from-file`:
+
+### Local development
 ```bash
-flutter run --dart-define=API_URL=http://localhost:3001
+flutter run --dart-define-from-file=env.local.json
+```
+> **Note for Android Emulators**: If running on an Android emulator, `localhost` points to the emulator itself. Set `"API_URL": "http://10.0.2.2:3001"` in `env.local.json` (or use your host machine's LAN IP for physical devices).
+
+### Production
+```bash
+flutter run --dart-define-from-file=env.prod.json
 ```
 
 ### Preview mode (no Firebase, no backend)
-
 ```bash
-flutter run --dart-define=PREVIEW=true
+flutter run --dart-define-from-file=env.preview.json
 ```
-
 Signs in a fixture user, serves fixture jobs from `MockApiClient`, and stands in a fake
 resume for the document picker. A mock run takes ~9 s so the search-progress state is visible.
 Use it for design work and screenshots.

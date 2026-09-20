@@ -15,12 +15,38 @@ import 'widgets/dropzone.dart';
 import 'widgets/resume_tile.dart';
 
 /// Step 1. Dropzone and nothing else — parsing starts on the run.
-class UploadScreen extends StatelessWidget {
+class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
+
+  @override
+  State<UploadScreen> createState() => _UploadScreenState();
+}
+
+class _UploadScreenState extends State<UploadScreen> {
+  final _urlCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _pick(BuildContext context) async {
     final resume = await context.read<UploadController>().pickAndUpload();
     if (resume != null && context.mounted) context.go(AppRoutes.interests);
+  }
+
+  Future<void> _addUrl(BuildContext context) async {
+    var url = _urlCtrl.text.trim();
+    if (url.isEmpty) return;
+    if (!url.startsWith('http')) {
+      url = 'https://$url';
+    }
+    final resume = await context.read<UploadController>().addUrl(url);
+    if (resume != null && context.mounted) {
+      _urlCtrl.clear();
+      context.go(AppRoutes.interests);
+    }
   }
 
   @override
@@ -35,14 +61,31 @@ class UploadScreen extends StatelessWidget {
         leading: BackButton(onPressed: () => context.go(AppRoutes.jobs)),
         title: const JmWordmark(size: 24),
       ),
-      bottom: latest == null
-          ? null
-          : PrimaryButton(
-              label: 'Continue with ${latest.filename.length > 24 ? 'this resume' : latest.filename}',
-              large: true,
-              icon: Icons.arrow_forward_rounded,
-              onPressed: resumes.uploading ? null : () => context.go(AppRoutes.interests),
-            ),
+      bottom: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: JmSpace.x2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (latest != null) ...[
+                PrimaryButton(
+                  label: 'Continue with ${latest.filename.length > 24 ? 'this resume' : latest.filename}',
+                  large: true,
+                  icon: Icons.arrow_forward_rounded,
+                  onPressed: resumes.uploading ? null : () => context.go(AppRoutes.interests),
+                ),
+                const SizedBox(height: JmSpace.x2),
+              ],
+              TextButton(
+                onPressed: () => context.go(AppRoutes.home),
+                child: Text('Skip for now', style: context.type.meta),
+              ),
+            ],
+          ),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -53,6 +96,30 @@ class UploadScreen extends StatelessWidget {
           ),
           const SizedBox(height: JmSpace.x6),
           Dropzone(onTap: () => _pick(context), uploading: resumes.uploading, progress: resumes.uploadProgress),
+          const SizedBox(height: JmSpace.x4),
+          Row(
+            children: [
+              const Expanded(child: Divider()),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('or', style: context.type.meta)),
+              const Expanded(child: Divider()),
+            ],
+          ),
+          const SizedBox(height: JmSpace.x4),
+          TextField(
+            controller: _urlCtrl,
+            decoration: InputDecoration(
+              labelText: 'Paste a link to your resume',
+              hintText: 'https://...',
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.arrow_forward_rounded),
+                onPressed: resumes.uploading ? null : () => _addUrl(context),
+              ),
+            ),
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.go,
+            onSubmitted: resumes.uploading ? null : (_) => _addUrl(context),
+            enabled: !resumes.uploading,
+          ),
           if (ctrl.error != null) ...[const SizedBox(height: JmSpace.x3), ErrorLine(ctrl.error!)],
           if (resumes.resumes.isNotEmpty) ...[
             const SizedBox(height: JmSpace.x8),

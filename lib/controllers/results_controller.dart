@@ -72,7 +72,7 @@ class ResultsController extends ChangeNotifier {
   }
 
   String get headline =>
-      JmCopy.resultsHeadline(_jobs.strongCount, _jobs.leadInterest ?? run?.request.interests.firstOrNull);
+      JmCopy.resultsHeadline(_jobs.strongCount, _jobs.goodCount, _jobs.leadInterest ?? run?.request.interests.firstOrNull);
 
   void _onRun() {
     final r = run;

@@ -1,3 +1,7 @@
+import 'package:go_router/go_router.dart';
+import '../../app/routes.dart';
+
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -47,6 +51,35 @@ class JobPreferencesScreen extends StatelessWidget {
             'The ranking uses these to score fit and flag listings that miss.',
             style: context.type.body.copyWith(color: c.muted),
           ),
+          const SizedBox(height: JmSpace.x6),
+          InkWell(
+            onTap: () {
+              context.push(AppRoutes.interests);
+            },
+            borderRadius: JmRadius.mdR,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: JmSpace.x2, horizontal: JmSpace.x1),
+              child: Row(
+                children: [
+                  Icon(Icons.interests_outlined, color: c.muted),
+                  const SizedBox(width: JmSpace.x3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Job Interests', style: context.type.uiStrong),
+                        const SizedBox(height: 2),
+                        Text(d.interests.isEmpty ? 'No interests yet' : d.interests.join(', '), style: context.type.meta),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: c.faint),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: JmSpace.x4),
+          const Divider(),
           const SizedBox(height: JmSpace.x6),
           TextField(
             controller: ctrl.salary,

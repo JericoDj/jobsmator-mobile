@@ -1,15 +1,16 @@
 class Resume {
-  const Resume({required this.id, required this.filename, required this.sizeBytes, required this.createdAt});
+  const Resume({required this.id, required this.filename, this.sizeBytes, required this.createdAt});
   final String id, filename;
-  final int sizeBytes;
+  final int? sizeBytes;
   final DateTime createdAt;
 
-  String get extension => filename.contains('.') ? filename.split('.').last.toUpperCase() : 'FILE';
+  String get extension => filename.contains('.') ? filename.split('.').last.toUpperCase() : 'LINK';
 
   String get sizeLabel {
-    if (sizeBytes < 1024) return '$sizeBytes B';
-    if (sizeBytes < 1024 * 1024) return '${(sizeBytes / 1024).round()} KB';
-    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (sizeBytes == null) return 'LINK';
+    if (sizeBytes! < 1024) return '$sizeBytes B';
+    if (sizeBytes! < 1024 * 1024) return '${(sizeBytes! / 1024).round()} KB';
+    return '${(sizeBytes! / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   factory Resume.fromJson(Map<String, dynamic> j) => Resume(

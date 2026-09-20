@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme/theme.dart';
+import '../../core/api/api_client.dart';
 import '../../core/copy.dart';
 import '../../providers/job_catalog_provider.dart';
+import '../../providers/preferences_provider.dart';
 import '../../providers/run_provider.dart';
 import '../../providers/subscription_provider.dart';
-import '../../core/models/job.dart';
 import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_page.dart';
-import '../shared/widgets/jm_toast.dart';
 import '../shared/widgets/notification_bell.dart';
+import '../shared/widgets/jm_toast.dart';
 import '../shared/widgets/section_header.dart';
 import '../shared/widgets/tab_header.dart';
 import '../home/job_list_screen.dart';
+import 'widgets/edit_interests_sheet.dart';
 import 'widgets/job_row.dart';
 
 /// The job database. Numbers first (three ring buttons that open the
@@ -30,17 +31,14 @@ class JobsScreen extends StatefulWidget {
 }
 
 class _JobsScreenState extends State<JobsScreen> {
-  Future<void> _openListing(Job job) async {
-    final ok = await launchUrl(Uri.parse(job.url), mode: LaunchMode.externalApplication);
-    if (!ok && mounted) showJmToast(context, title: "Couldn't open ${job.site}", tone: ToastTone.error);
-  }
-
   @override
   void initState() {
     super.initState();
     final catalog = context.read<JobCatalogProvider>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!catalog.loaded) catalog.load().catchError((_) {});
+      if (catalog.boardIsSample && !catalog.feedLoading)
+        catalog.refreshBoard().catchError((_) {});
       final runs = context.read<RunProvider>();
       if (!runs.historyLoaded) runs.loadHistory().catchError((_) {});
       final subs = context.read<SubscriptionProvider>();
@@ -76,13 +74,20 @@ class _JobsScreenState extends State<JobsScreen> {
             total: catalog.all.where((j) => !j.hidden).length,
             newMatches: catalog.newMatches,
             applied: catalog.applied,
-            notApplied: catalog.all.where((j) => !j.hidden && !j.applied).length,
-            creditsLine: '${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.plan.periodLabel}',
+            notApplied: catalog.all
+                .where((j) => !j.hidden && !j.applied)
+                .length,
+            creditsLine:
+                '${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.plan.periodLabel}',
             running: running,
-            onNew: () => context.push(AppRoutes.jobList(JobListKind.matches.name)),
-            onApplied: () => context.push(AppRoutes.jobList(JobListKind.applied.name)),
-            onNotApplied: () => context.push(AppRoutes.jobList(JobListKind.notApplied.name)),
-            onViewAll: () => context.push(AppRoutes.jobList(JobListKind.all.name)),
+            onNew: () =>
+                context.push(AppRoutes.jobList(JobListKind.matches.name)),
+            onApplied: () =>
+                context.push(AppRoutes.jobList(JobListKind.applied.name)),
+            onNotApplied: () =>
+                context.push(AppRoutes.jobList(JobListKind.notApplied.name)),
+            onViewAll: () =>
+                context.push(AppRoutes.jobList(JobListKind.all.name)),
             onAutomation: () => context.push(AppRoutes.automation),
           ),
           const SizedBox(height: JmSpace.x2),
@@ -91,10 +96,28 @@ class _JobsScreenState extends State<JobsScreen> {
           SectionHeader(
             title: 'On the job board',
             badge: catalog.boardIsSample ? 'Sample' : null,
-            action: 'Shuffle',
-            onAction: catalog.feedLoading ? null : catalog.refreshBoard,
+            action: catalog.shufflesLeft == null
+                ? 'Shuffle'
+                : catalog.shufflesLeft == 0
+                ? 'Shuffle tomorrow'
+                : 'Shuffle · ${catalog.shufflesLeft} left',
+            onAction: catalog.feedLoading || catalog.shufflesLeft == 0
+                ? null
+                : () => catalog.refreshBoard().catchError((e) {
+                    if (!context.mounted) return;
+                    showJmToast(
+                      context,
+                      title: messageOf(e),
+                      tone: ToastTone.error,
+                    );
+                  }),
           ),
           const SizedBox(height: JmSpace.x2),
+          _InterestsLine(
+            interests: context.watch<PreferencesProvider>().defaults.interests,
+            onEdit: () => showEditInterestsSheet(context),
+          ),
+          const SizedBox(height: JmSpace.x3),
 
           AnimatedOpacity(
             opacity: catalog.feedLoading ? .5 : 1,
@@ -103,19 +126,18 @@ class _JobsScreenState extends State<JobsScreen> {
               children: [
                 for (final (i, job) in catalog.board.take(5).indexed) ...[
                   if (i > 0) const SizedBox(height: JmSpace.x2),
-                  JobRow(job: job, dense: true, onTap: () => _openListing(job)),
-
-
+                  JobRow(
+                    job: job,
+                    dense: true,
+                    showScore: false,
+                    onTap: () => context.push(AppRoutes.job(job.id)),
+                  ),
                 ],
                 const SizedBox(height: JmSpace.x8),
                 const SizedBox(height: JmSpace.x3),
               ],
             ),
           ),
-
-
-
-
         ],
       ),
     );
@@ -144,7 +166,6 @@ class _NumbersCard extends StatelessWidget {
   final bool running;
   final VoidCallback onNew, onApplied, onNotApplied, onViewAll, onAutomation;
 
-
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
@@ -160,25 +181,64 @@ class _NumbersCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('${JmCopy.plural(total, 'job')} in your database', style: context.type.uiStrong)),
+              Expanded(
+                child: Text(
+                  '${JmCopy.plural(total, 'job')} in your database',
+                  style: context.type.uiStrong,
+                ),
+              ),
               Icon(Icons.toll_rounded, size: 14, color: c.muted),
               const SizedBox(width: 4),
-              Text(creditsLine, style: context.type.meta.copyWith(fontSize: 12)),
+              Text(
+                creditsLine,
+                style: context.type.meta.copyWith(fontSize: 12),
+              ),
             ],
           ),
           const SizedBox(height: JmSpace.x4),
           Row(
             children: [
-              Expanded(child: _Ring(value: newMatches, total: total, label: 'New', color: c.match, onTap: onNew)),
-              Expanded(child: _Ring(value: applied, total: total, label: 'Applied', color: c.ocean, onTap: onApplied)),
-              Expanded(child: _Ring(value: notApplied, total: total, label: 'Not applied', color: c.sky, onTap: onNotApplied)),
+              Expanded(
+                child: _Ring(
+                  value: newMatches,
+                  total: total,
+                  label: 'New',
+                  color: c.match,
+                  onTap: onNew,
+                ),
+              ),
+              Expanded(
+                child: _Ring(
+                  value: applied,
+                  total: total,
+                  label: 'Applied',
+                  color: c.ocean,
+                  onTap: onApplied,
+                ),
+              ),
+              Expanded(
+                child: _Ring(
+                  value: notApplied,
+                  total: total,
+                  label: 'Not applied',
+                  color: c.sky,
+                  onTap: onNotApplied,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: JmSpace.x2),
-          PrimaryButton(label: 'My jobs', icon: Icons.work_outline_rounded, onPressed: onViewAll),
+          PrimaryButton(
+            label: 'My jobs',
+            icon: Icons.work_outline_rounded,
+            onPressed: onViewAll,
+          ),
           const SizedBox(height: JmSpace.x1),
-          SecondaryButton(label: 'Jobs automation', icon: Icons.bolt_rounded, onPressed: onAutomation),
-
+          SecondaryButton(
+            label: 'Jobs automation',
+            icon: Icons.bolt_rounded,
+            onPressed: onAutomation,
+          ),
         ],
       ),
     );
@@ -188,7 +248,13 @@ class _NumbersCard extends StatelessWidget {
 /// A circular button: ring showing [value] as a share of [total], the
 /// number inside, the label under it.
 class _Ring extends StatelessWidget {
-  const _Ring({required this.value, required this.total, required this.label, required this.color, required this.onTap});
+  const _Ring({
+    required this.value,
+    required this.total,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
   final int value, total;
   final String label;
   final Color color;
@@ -226,17 +292,110 @@ class _Ring extends StatelessWidget {
                         backgroundColor: c.surface2,
                       ),
                     ),
-                    Center(child: Text('$value', style: context.type.stat.copyWith(fontSize: 22))),
+                    Center(
+                      child: Text(
+                        '$value',
+                        style: context.type.stat.copyWith(fontSize: 22),
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 6),
-              Text(label, style: context.type.meta.copyWith(fontSize: 12, fontWeight: FontWeight.w600)),
-
+              Text(
+                label,
+                style: context.type.meta.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
-
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// What the board is picked from: the user's interests as chips in a quiet
+/// card, wrapping to as many lines as needed, with Edit as the last chip.
+class _InterestsLine extends StatelessWidget {
+  const _InterestsLine({required this.interests, required this.onEdit});
+  final List<String> interests;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(color: c.surface, borderRadius: JmRadius.mdR),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 2),
+            child: Text(
+              interests.isEmpty
+                  ? 'Add interests to get picks for you'
+                  : 'Picked for',
+              style: context.type.meta,
+            ),
+          ),
+          for (final interest in interests)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(
+                color: c.oceanTint.withValues(alpha: .6),
+                borderRadius: JmRadius.pillR,
+              ),
+              child: Text(
+                interest,
+                style: context.type.meta.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: c.oceanDeep,
+                ),
+              ),
+            ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: JmRadius.pillR,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: JmRadius.pillR,
+                  border: Border.all(color: c.lineStrong),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      interests.isEmpty
+                          ? Icons.add_rounded
+                          : Icons.edit_outlined,
+                      size: 13,
+                      color: c.oceanDeep,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      interests.isEmpty ? 'Add' : 'Edit',
+                      style: context.type.meta.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: c.oceanDeep,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

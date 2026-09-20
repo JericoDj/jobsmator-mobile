@@ -3,20 +3,28 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/theme.dart';
 import '../../../core/copy.dart';
 import '../../../core/models/job.dart';
+import '../../../core/job_icons.dart';
 
 /// Compact, scannable row for lists of many jobs (Jobs tab, Home).
 /// Score as a small ring + number; tier dot; applied/saved marks.
 class JobRow extends StatelessWidget {
-  const JobRow({super.key, required this.job, required this.onTap, this.dense = false});
+  const JobRow({
+    super.key,
+    required this.job,
+    required this.onTap,
+    this.dense = false,
+    this.showScore = true,
+  });
   final Job job;
   final VoidCallback onTap;
   final bool dense;
+  final bool showScore;
 
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
     final t = context.tiers;
-    final ring = job.score >= 80
+    final ring = job.score >= 70
         ? c.match
         : job.score >= 60
         ? c.ocean
@@ -26,7 +34,13 @@ class JobRow extends StatelessWidget {
       Tier.good => t.goodDot,
       Tier.skip => t.skipDot,
     };
-    final meta = [job.company, job.site, if (job.remote) 'Remote' else if (job.location.isNotEmpty) job.location];
+    final meta = [
+      if (job.industry.isNotEmpty) job.industry,
+      job.company,
+      job.site,
+      if (job.remote) 'Remote' else if (job.location.isNotEmpty) job.location,
+    ];
+    final jobIcon = getJobIcon(job.title, context);
 
     return Material(
       color: Colors.transparent,
@@ -34,7 +48,10 @@ class JobRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: JmRadius.mdR,
         child: Container(
-          padding: EdgeInsets.symmetric(vertical: dense ? 10 : 12, horizontal: 12),
+          padding: EdgeInsets.symmetric(
+            vertical: dense ? 10 : 12,
+            horizontal: 12,
+          ),
           decoration: BoxDecoration(
             color: c.card,
             borderRadius: JmRadius.mdR,
@@ -42,12 +59,29 @@ class JobRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _MiniRing(
-                score: job.score,
-                color: ring,
-                track: c.surface2,
-                textStyle: context.type.stat.copyWith(fontSize: 13),
-              ),
+              if (showScore)
+                _MiniRing(
+                  score: job.score,
+                  color: ring,
+                  track: c.surface2,
+                  textStyle: context.type.stat.copyWith(fontSize: 13),
+                )
+              else
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: jobIcon.color.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(jobIcon.icon, color: jobIcon.color, size: 20),
+                    ),
+                  ),
+                ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -59,34 +93,44 @@ class JobRow extends StatelessWidget {
                           child: Text(
                             job.title,
                             style: context.type.uiStrong,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (job.applied) ...[
+                        if (job.expired) ...[
+                          const SizedBox(width: 6),
+                          _Tag('Expired', bg: c.warnTint, fg: c.warn),
+                        ] else if (job.applied) ...[
                           const SizedBox(width: 6),
                           _Tag('Applied', bg: c.matchTint, fg: c.matchDeep),
                         ] else if (job.saved) ...[
                           const SizedBox(width: 6),
-                          Icon(Icons.bookmark_rounded, size: 16, color: c.oceanDeep),
+                          Icon(
+                            Icons.bookmark_rounded,
+                            size: 16,
+                            color: c.oceanDeep,
+                          ),
                         ],
                       ],
                     ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-                        ),
-                        const SizedBox(width: 6),
+                        if (showScore) ...[
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: dot,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         Expanded(
                           child: Text(
                             '${meta.join(' · ')}${job.postedAt == null ? '' : ' · ${JmCopy.relative(job.postedAt)}'}',
                             style: context.type.meta,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -114,13 +158,23 @@ class _Tag extends StatelessWidget {
     decoration: BoxDecoration(color: bg, borderRadius: JmRadius.pillR),
     child: Text(
       text,
-      style: context.type.meta.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: fg, height: 1.2),
+      style: context.type.meta.copyWith(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: fg,
+        height: 1.2,
+      ),
     ),
   );
 }
 
 class _MiniRing extends StatelessWidget {
-  const _MiniRing({required this.score, required this.color, required this.track, required this.textStyle});
+  const _MiniRing({
+    required this.score,
+    required this.color,
+    required this.track,
+    required this.textStyle,
+  });
   final int score;
   final Color color, track;
   final TextStyle textStyle;

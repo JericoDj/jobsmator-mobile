@@ -7,6 +7,7 @@ import '../core/models/subscription.dart';
 /// goes through `/v1/billing/checkout`, which the store purchase flow will
 /// call once in-app purchases are wired up.
 class SubscriptionProvider extends ChangeNotifier {
+  void clear() { _loaded = false; _sub = const Subscription(); notifyListeners(); }
   SubscriptionProvider(this._api);
 
   final ApiClient _api;
@@ -37,6 +38,12 @@ class SubscriptionProvider extends ChangeNotifier {
   Future<void> subscribe(Plan plan) async {
     final res = await _api.post('/v1/billing/checkout', body: {'plan': plan.name});
     _sub = Subscription.fromJson((res['subscription'] as Map? ?? {'plan': plan.name}).cast<String, dynamic>());
+    notifyListeners();
+  }
+
+  Future<void> redeemVoucher(String code) async {
+    final res = await _api.post('/v1/billing/redeem', body: {'code': code});
+    _sub = Subscription.fromJson((res['subscription'] as Map? ?? {'plan': 'pro'}).cast<String, dynamic>());
     notifyListeners();
   }
 

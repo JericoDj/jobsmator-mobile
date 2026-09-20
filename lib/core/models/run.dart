@@ -6,9 +6,11 @@ class RunStats {
     required this.alreadyProcessed,
     required this.scored,
     required this.recommended,
+    this.feedback,
     required this.perSite,
   });
   final int fetchedUnique, alreadyProcessed, scored, recommended;
+  final String? feedback;
   final Map<String, int> perSite;
 
   factory RunStats.fromJson(Map<String, dynamic> j) => RunStats(
@@ -16,6 +18,7 @@ class RunStats {
     alreadyProcessed: j['already_processed'] ?? 0,
     scored: j['scored'] ?? 0,
     recommended: j['recommended'] ?? 0,
+    feedback: (j['feedback'] as String?)?.trim().isEmpty ?? true ? null : (j['feedback'] as String).trim(),
     perSite: (j['recommended_per_site'] as Map? ?? const {}).map((k, v) => MapEntry(k as String, v as int)),
   );
 }

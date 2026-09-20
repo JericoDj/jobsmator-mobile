@@ -13,8 +13,21 @@ import '../shared/widgets/jm_toast.dart';
 
 /// The paywall. Two plan cards, one Cobalt CTA, no countdowns or badges.
 /// Calm by default: the case for Pro is the numbers, not the colour.
-class SubscribeScreen extends StatelessWidget {
+class SubscribeScreen extends StatefulWidget {
   const SubscribeScreen({super.key});
+
+  @override
+  State<SubscribeScreen> createState() => _SubscribeScreenState();
+}
+
+class _SubscribeScreenState extends State<SubscribeScreen> {
+  final _voucherController = TextEditingController();
+
+  @override
+  void dispose() {
+    _voucherController.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirm(BuildContext context) async {
     final ctrl = context.read<SubscribeController>();
@@ -27,6 +40,24 @@ class SubscribeScreen extends StatelessWidget {
       body: wantsPro
           ? '5 searches an hour across all ten sites, plus Save to Sheets.'
           : 'One search a day across three sites.',
+      tone: ToastTone.success,
+    );
+    context.canPop() ? context.pop() : context.go(AppRoutes.profile);
+  }
+
+  Future<void> _redeemVoucher(BuildContext context) async {
+    final ctrl = context.read<SubscribeController>();
+    final code = _voucherController.text.trim();
+    if (code.isEmpty) return;
+    
+    final ok = await ctrl.redeemVoucher(code);
+    if (!ok || !context.mounted) return;
+    
+    _voucherController.clear();
+    showJmToast(
+      context,
+      title: "Voucher Applied!",
+      body: "You now have Pro access.",
       tone: ToastTone.success,
     );
     context.canPop() ? context.pop() : context.go(AppRoutes.profile);
@@ -111,6 +142,34 @@ class SubscribeScreen extends StatelessWidget {
             'Either way, every match shows why it fits. Pro just lets you run more of them.',
             style: context.type.meta,
           ),
+          const SizedBox(height: JmSpace.x6),
+          // Voucher Section
+          JmLabel('Have a promo code?', color: c.muted),
+          const SizedBox(height: JmSpace.x2),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _voucherController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter voucher code',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: JmRadius.mdR,
+                      borderSide: BorderSide(color: c.line),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: JmSpace.x2),
+              SecondaryButton(
+                label: 'Apply',
+                onPressed: ctrl.busy ? null : () => _redeemVoucher(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: JmSpace.x6),
         ],
       ),
     );

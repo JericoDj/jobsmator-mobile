@@ -336,7 +336,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: JmSpace.x8),
-          DangerButton(label: 'Sign out', onPressed: auth.signOut),
+          DangerButton(
+            label: 'Sign out',
+            onPressed: () async {
+              try {
+                context.read<JobCatalogProvider>().clear();
+                context.read<RunProvider>().clear();
+                context.read<PreferencesProvider>().clear();
+                context.read<SubscriptionProvider>().clear();
+                await auth.signOut();
+              } catch (e) {
+                // ignore
+              }
+            },
+          ),
           const SizedBox(height: JmSpace.x4),
           const AppVersionLabel(prefix: 'JobsMator · '),
         ],

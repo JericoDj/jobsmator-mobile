@@ -42,4 +42,21 @@ class SubscribeController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<bool> redeemVoucher(String code) async {
+    if (code.isEmpty) return false;
+    _busy = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _subs.redeemVoucher(code);
+      return true;
+    } catch (e) {
+      _error = messageOf(e, fallback: "Couldn't redeem voucher.");
+      return false;
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
 }

@@ -41,12 +41,12 @@ class _ScoreRingState extends State<ScoreRing> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
-    final color = widget.score >= 80
+    final color = widget.score >= 70
         ? c.match
         : widget.score >= 60
         ? c.ocean
         : c.faint;
-    final tier = widget.score >= 80
+    final tier = widget.score >= 70
         ? 'strong'
         : widget.score >= 60
         ? 'good'

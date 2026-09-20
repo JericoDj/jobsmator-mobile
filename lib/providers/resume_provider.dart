@@ -45,7 +45,13 @@ class ResumeProvider extends ChangeNotifier {
       if (AppConfig.preview) {
         await _fakeProgress();
       } else {
-        final task = FirebaseStorage.instance.ref(path).putFile(file);
+        final contentType = filename.toLowerCase().endsWith('.pdf') 
+            ? 'application/pdf' 
+            : (filename.toLowerCase().endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : null);
+        final task = FirebaseStorage.instance.ref(path).putFile(
+          file,
+          contentType != null ? SettableMetadata(contentType: contentType) : null,
+        );
         final sub = task.snapshotEvents.listen((s) {
           _progress = s.totalBytes == 0 ? 0 : s.bytesTransferred / s.totalBytes;
           notifyListeners();
@@ -54,6 +60,21 @@ class ResumeProvider extends ChangeNotifier {
         await sub.cancel();
       }
       final res = await _api.post('/v1/resumes', body: {'storagePath': path, 'filename': filename, 'sizeBytes': size});
+      await load();
+      return _resumes.firstWhere((r) => r.id == res['resumeId'], orElse: () => _resumes.first);
+    } finally {
+      _uploading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Resume> addUrl(String url) async {
+    _uploading = true;
+    notifyListeners();
+    try {
+      final uri = Uri.parse(url);
+      final filename = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'resume.pdf';
+      final res = await _api.post('/v1/resumes', body: {'url': url, 'filename': filename});
       await load();
       return _resumes.firstWhere((r) => r.id == res['resumeId'], orElse: () => _resumes.first);
     } finally {

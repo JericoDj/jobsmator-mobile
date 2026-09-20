@@ -40,6 +40,21 @@ class UploadController extends ChangeNotifier {
     }
   }
 
+  Future<Resume?> addUrl(String url) async {
+    _error = null;
+    notifyListeners();
+    try {
+      return await _resumes.addUrl(url);
+    } catch (e, stack) {
+      debugPrint('=== URL UPLOAD ERROR ===');
+      debugPrint(e.toString());
+      debugPrint(stack.toString());
+      _error = messageOf(e, fallback: "We couldn't add that URL. Please try again.");
+      notifyListeners();
+      return null;
+    }
+  }
+
   Future<(File?, String?)> _pick() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'docx']);
     final f = result?.files.single;

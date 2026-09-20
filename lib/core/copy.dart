@@ -8,20 +8,23 @@ abstract final class JmCopy {
       "We couldn't read that resume. Try a text-based PDF instead of a scan, or paste a different link.",
     'engine_unavailable' => 'Job sites are slow right now. Try again in a minute.',
     'too_many_runs' =>
-      "You've used 5 searches this hour."
+      "You've reached your search limit for this hour."
           '${retryAt == null ? '' : ' Next one at ${_hhmm(retryAt)}.'}',
     'run_in_progress' => 'A search is already running — hang on.',
     'network' => 'Check your connection and try again.',
+    'too_many_shuffles' => "You've used today's 5 shuffles. New picks land tomorrow.",
     _ => 'Something went wrong. Try again.',
   };
 
-  static String resultsHeadline(int strong, String? interest) {
+  static String resultsHeadline(int strong, int good, String? interest) {
     final what = interest == null || interest.isEmpty ? '' : ' for $interest';
-    return switch (strong) {
-      0 => 'No strong matches yet',
-      1 => '1 strong match$what',
-      _ => '$strong strong matches$what',
-    };
+    if (strong > 0) {
+      return strong == 1 ? '1 strong match$what' : '$strong strong matches$what';
+    }
+    if (good > 0) {
+      return good == 1 ? '1 good match$what' : '$good good matches$what';
+    }
+    return 'No matches yet';
   }
 
   static String weakerLink(int n) => 'Show $n weaker ${n == 1 ? 'match' : 'matches'}';
