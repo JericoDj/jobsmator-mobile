@@ -1,0 +1,8 @@
+# Copy to android/key.properties (gitignored) after creating the upload keystore:
+#   keytool -genkey -v -keystore ~/jobsmator-upload.jks -keyalg RSA \
+#     -keysize 2048 -validity 10000 -alias upload
+# storeFile is relative to the android/ folder, or an absolute path.
+storePassword=
+keyPassword=
+keyAlias=upload
+storeFile=/Users/you/jobsmator-upload.jks
