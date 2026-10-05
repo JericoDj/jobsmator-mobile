@@ -98,7 +98,7 @@ GoRouter buildRouter(AuthProvider auth, OnboardingProvider onboarding) => GoRout
               path: AppRoutes.home,
               name: RouteNames.home,
               builder: (_, _) => ChangeNotifierProvider(
-                create: (ctx) => HomeController(ctx.read(), ctx.read(), ctx.read(), ctx.read()),
+                create: (ctx) => HomeController(ctx.read(), ctx.read(), ctx.read(), ctx.read(), ctx.read()),
                 child: const HomeScreen(),
               ),
               routes: [

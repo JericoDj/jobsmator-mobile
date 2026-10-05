@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/api/api_client.dart';
+import '../core/billing/store_billing.dart';
 import '../core/models/subscription.dart';
 import '../providers/subscription_provider.dart';
 
@@ -11,31 +12,90 @@ class SubscribeController extends ChangeNotifier {
   final SubscriptionProvider _subs;
 
   Plan _selected; // Pro is highlighted by default; the user can pick Free.
+  ProTerm _term = ProTerm.yearly; // Best value first; the user can switch to monthly.
+  List<ProOffer> _offers = fallbackProOffers;
   bool _busy = false;
   String? _error;
 
   Plan get selected => _selected;
+  ProTerm get term => _term;
+  List<ProOffer> get offers => _offers;
+  ProOffer get offer => _offers.firstWhere((o) => o.term == _term, orElse: () => _offers.first);
   bool get busy => _busy;
   String? get error => _error;
   bool get alreadyPro => _subs.isPro;
   bool get canConfirm => !_busy && _selected != _subs.plan;
+
+  /// The store button only makes sense while RevenueCat is actually wired
+  /// up; otherwise the screen quietly falls back to the mock checkout.
+  bool get usesStoreBilling => StoreBilling.configured;
 
   void select(Plan plan) {
     _selected = plan;
     notifyListeners();
   }
 
-  /// Returns true when the plan changed. Billing runs through the store
-  /// purchase flow; the API records the result.
+  /// Picking a term also selects Pro — tapping "Yearly" means "I want that".
+  void selectTerm(ProTerm term) {
+    _term = term;
+    _selected = Plan.pro;
+    notifyListeners();
+  }
+
+  /// Swaps the fallback prices for the store's localised ones once the
+  /// offering has loaded. Quietly keeps the fallbacks on any failure.
+  Future<void> loadOffers() async {
+    try {
+      final store = await StoreBilling.offers();
+      if (store == null) return;
+      _offers = store;
+      if (!_offers.any((o) => o.term == _term)) _term = _offers.first.term;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Returns true when the plan changed. Goes through the store purchase
+  /// flow when RevenueCat is configured (then syncs the result with the
+  /// backend); falls back to the mock `/v1/billing/checkout` otherwise —
+  /// which is all that preview builds and dev-without-keys ever have.
   Future<bool> confirm() async {
     _busy = true;
     _error = null;
     notifyListeners();
     try {
+      if (StoreBilling.configured && _selected == Plan.pro) {
+        final active = await StoreBilling.purchasePro(_term);
+        if (!active) return false; // user cancelled; not an error
+        await _subs.syncWithStore();
+        return true;
+      }
       await _subs.subscribe(_selected);
       return true;
     } catch (e) {
       _error = messageOf(e, fallback: "We couldn't complete that purchase. You haven't been charged.");
+      return false;
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// "Restore purchases" — re-links whatever this store account already
+  /// owns and re-syncs the backend. Returns true when Pro came back active.
+  Future<bool> restore() async {
+    _busy = true;
+    _error = null;
+    notifyListeners();
+    try {
+      if (!StoreBilling.configured) {
+        _error = 'Nothing to restore.';
+        return false;
+      }
+      final active = await StoreBilling.restore();
+      await _subs.syncWithStore();
+      return active;
+    } catch (e) {
+      _error = messageOf(e, fallback: "Couldn't restore purchases.");
       return false;
     } finally {
       _busy = false;

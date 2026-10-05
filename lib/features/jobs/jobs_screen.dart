@@ -78,7 +78,7 @@ class _JobsScreenState extends State<JobsScreen> {
                 .where((j) => !j.hidden && !j.applied)
                 .length,
             creditsLine:
-                '${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.plan.periodLabel}',
+                '${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.current.periodLabel}',
             running: running,
             onNew: () =>
                 context.push(AppRoutes.jobList(JobListKind.matches.name)),

@@ -1,4 +1,4 @@
-package com.jobsmator.jobsmator_mobile
+package com.leos.jobsmator
 
 import io.flutter.embedding.android.FlutterActivity
 

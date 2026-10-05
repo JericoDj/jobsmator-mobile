@@ -129,7 +129,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           const SizedBox(height: 4),
           Text(
             'Each scheduled run spends one credit, same as a manual search. '
-            'You have ${subs.searchesLeft} left ${subs.plan.periodLabel} on the ${subs.plan.label} plan.',
+            'You have ${subs.searchesLeft} left ${subs.current.periodLabel} on the ${subs.plan.label} plan.',
             style: context.type.body.copyWith(color: c.muted, fontSize: 14),
           ),
           const SizedBox(height: JmSpace.x6),

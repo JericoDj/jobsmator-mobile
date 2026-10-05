@@ -16,6 +16,7 @@ class AuthController extends ChangeNotifier {
 
   bool _busy = false;
   bool _done = false;
+  bool _disposed = false;
   String? _error;
 
   bool get busy => _busy;
@@ -55,7 +56,7 @@ class AuthController extends ChangeNotifier {
   Future<void> _guard(Future<void> Function() action) async {
     _busy = true;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       await action();
     } catch (e) {
@@ -63,13 +64,20 @@ class AuthController extends ChangeNotifier {
       if (!_cancelled(e)) _error = _describe(e);
     } finally {
       _busy = false;
-      notifyListeners();
+      _notify();
     }
+  }
+
+  /// A successful sign-in routes away immediately, which disposes this
+  /// route-scoped controller while the call is still unwinding — so the
+  /// trailing notify has to be a no-op rather than a crash.
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   void _fail(String message) {
     _error = message;
-    notifyListeners();
+    _notify();
   }
 
   String _describe(Object e) {
@@ -99,6 +107,7 @@ class AuthController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     name.dispose();
     email.dispose();
     password.dispose();

@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Jobsmator Mobile</string>
+	<string>JobsMator</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,15 +15,13 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>jobsmator_mobile</string>
+	<string>JobsMator</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -31,13 +29,31 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<!-- REVERSED_CLIENT_ID from GoogleService-Info.plist; Google Sign-In returns here. -->
-				<string>com.googleusercontent.apps.211868100065-candgqqud3jcgbcmbqtgdforriqmlvda</string>
+				<string>com.googleusercontent.apps.211868100065-r4lb9tsn4v8m4c41fadqkflmqj8dkapo</string>
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>JobsMator uses the camera to put your progress sticker on a photo.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>JobsMator uses the microphone so you can dictate a question to the assistant.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>JobsMator saves your progress card to your photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>JobsMator opens your photos so you can add your progress sticker to one.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>JobsMator turns your dictation into text for the assistant.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartobservatory._tcp</string>
+		<string>_dartvmService._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Allow Flutter development tools to connect to your app for debugging.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -78,15 +94,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>JobsMator uses the microphone so you can dictate a question to the assistant.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>JobsMator turns your dictation into text for the assistant.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>JobsMator uses the camera to put your progress sticker on a photo.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>JobsMator opens your photos so you can add your progress sticker to one.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>JobsMator saves your progress card to your photos.</string>
 </dict>
 </plist>

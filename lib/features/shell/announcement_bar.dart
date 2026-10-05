@@ -31,7 +31,7 @@ class AnnouncementBar extends StatelessWidget {
       ..sort();
     if (next.isNotEmpty) out.add('Next auto run ${JmCopy.relativeFuture(next.first)}');
 
-    out.add('${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.plan.periodLabel}');
+    out.add('${JmCopy.plural(subs.searchesLeft, 'search', 'searches')} left ${subs.current.periodLabel}');
 
     for (final r in runs.history.where((r) => !r.isActive).take(3)) {
       final when = JmCopy.relative(r.finishedAt ?? r.startedAt);

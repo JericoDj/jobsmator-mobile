@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../app/routes.dart';
 import '../../app/theme/theme.dart';
 import '../../core/copy.dart';
+import '../../core/ai/ai_service.dart';
 import '../../providers/ai_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../shared/widgets/edge_fade.dart';
@@ -221,7 +222,7 @@ class _PlanCard extends StatelessWidget {
     final c = context.jm;
     final subs = context.watch<SubscriptionProvider>();
     final left = subs.searchesLeft;
-    final limit = subs.plan.searchLimit;
+    final limit = subs.current.searchLimit;
     return Container(
       padding: const EdgeInsets.all(JmSpace.x4),
       decoration: BoxDecoration(
@@ -275,7 +276,7 @@ class _PlanCard extends StatelessWidget {
           ),
           const SizedBox(height: JmSpace.x2),
           Text(
-            '${JmCopy.plural(left, 'search', 'searches')} left ${subs.plan.periodLabel} · $limit per ${subs.plan.period}',
+            '${JmCopy.plural(left, 'search', 'searches')} left ${subs.current.periodLabel} · $limit per ${subs.current.period}',
             style: context.type.meta,
           ),
         ],

@@ -41,6 +41,16 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// `POST /v1/billing/sync` — called after a store purchase or restore so
+  /// the backend re-reads RevenueCat and we pick up whatever it decided.
+  /// The route returns `Me`, so the subscription is nested the same way
+  /// `/v1/me` returns it.
+  Future<void> syncWithStore() async {
+    final me = await _api.post('/v1/billing/sync');
+    _sub = Subscription.fromJson((me['subscription'] as Map? ?? const {}).cast<String, dynamic>());
+    notifyListeners();
+  }
+
   Future<void> redeemVoucher(String code) async {
     final res = await _api.post('/v1/billing/redeem', body: {'code': code});
     _sub = Subscription.fromJson((res['subscription'] as Map? ?? {'plan': 'pro'}).cast<String, dynamic>());

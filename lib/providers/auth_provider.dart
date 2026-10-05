@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/api/api_client.dart';
+import '../core/billing/store_billing.dart';
 import '../core/config.dart';
 import '../core/models/app_user.dart';
 
@@ -21,6 +22,14 @@ class AuthProvider extends ChangeNotifier {
       _user = u == null ? null : AppUser(uid: u.uid, email: u.email, displayName: u.displayName, photoUrl: u.photoURL);
       _ready = true;
       notifyListeners();
+      // Keep RevenueCat's identity in step with Firebase's, so a store
+      // purchase always lands on the right account. Fire-and-forget: these
+      // never block the auth flow, and are no-ops without a store key.
+      if (u == null) {
+        StoreBilling.logOut();
+      } else {
+        StoreBilling.logIn(u.uid);
+      }
     });
   }
 
@@ -94,6 +103,19 @@ class AuthProvider extends ChangeNotifier {
       ..addScope('email')
       ..addScope('name');
     await fb.FirebaseAuth.instance.signInWithProvider(apple);
+  }
+
+  /// Deletes the account for good: the API drops the user's rows and the
+  /// Firebase user, which signs this device out as a side effect.
+  Future<void> deleteAccount(ApiClient api) async {
+    if (AppConfig.preview) {
+      _user = null;
+      notifyListeners();
+      return;
+    }
+    await api.delete('/v1/me');
+    StoreBilling.logOut();
+    await fb.FirebaseAuth.instance.signOut();
   }
 
   Future<void> signOut() async {

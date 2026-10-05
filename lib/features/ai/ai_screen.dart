@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
@@ -38,6 +40,7 @@ class _AiScreenState extends State<AiScreen> {
     if (ai != _ai) {
       _ai?.removeListener(_followTail);
       _ai = ai..addListener(_followTail);
+      ai.load();
     }
   }
 
@@ -108,7 +111,7 @@ class _AiScreenState extends State<AiScreen> {
   Future<void> _send([String? text]) async {
     final ai = context.read<AiProvider>();
     final t = text ?? _input.text;
-    if (t.trim().isEmpty) return;
+    if (t.trim().isEmpty && ai.pending.isEmpty) return;
     _input.clear();
     await ai.send(t);
     if (!mounted) return;
@@ -123,6 +126,16 @@ class _AiScreenState extends State<AiScreen> {
   }
 
   void _openTools() => showAiSideSheet(context);
+
+  /// Pick a picture (a job post, a resume page, a recruiter's message) to
+  /// send with the next message. It uploads right away so the model can
+  /// describe it while the user is still typing.
+  Future<void> _attach() async {
+    final ai = context.read<AiProvider>();
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 2000, imageQuality: 85);
+    if (picked == null || !mounted) return;
+    await ai.attach(File(picked.path));
+  }
 
   // Swipe in from the left edge opens the sheet, like a drawer.
   double? _edgeDragStart;
@@ -187,7 +200,9 @@ class _AiScreenState extends State<AiScreen> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: ai.isEmpty
+                child: ai.loadingThread
+                    ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: c.ocean))
+                    : ai.isEmpty
                     ? const _Hero()
                     : EdgeFade(
                         top: topBand,
@@ -251,12 +266,23 @@ class _AiScreenState extends State<AiScreen> {
                           style: context.type.meta.copyWith(color: c.danger),
                         ),
                       ),
+                    if (ai.pending.isNotEmpty || ai.uploading)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: JmSpace.x2),
+                        child: _PendingRow(
+                          attachments: ai.pending,
+                          uploading: ai.uploading,
+                          onRemove: ai.removePending,
+                        ),
+                      ),
                     _Composer(
                       controller: _input,
                       focusNode: _focus,
                       busy: ai.busy,
+                      uploading: ai.uploading,
                       listening: _listening,
                       onPlus: _openTools,
+                      onAttach: _attach,
                       onMic: _toggleDictation,
                       onSend: _send,
                       onStop: ai.stop,
@@ -498,16 +524,18 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.uploading,
     required this.listening,
     required this.onPlus,
+    required this.onAttach,
     required this.onMic,
     required this.onSend,
     required this.onStop,
   });
   final TextEditingController controller;
   final FocusNode focusNode;
-  final bool busy, listening;
-  final VoidCallback onPlus, onMic, onSend, onStop;
+  final bool busy, uploading, listening;
+  final VoidCallback onPlus, onAttach, onMic, onSend, onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -557,6 +585,19 @@ class _Composer extends StatelessWidget {
                   focusedBorder: InputBorder.none,
                 ),
               ),
+            ),
+          ),
+          // Attach an image. Disabled while one is still uploading.
+          IconButton(
+            tooltip: 'Attach an image',
+            onPressed: uploading ? null : onAttach,
+            icon: const Icon(Icons.image_outlined, size: 22),
+            style: IconButton.styleFrom(
+              foregroundColor: c.ink,
+              disabledForegroundColor: c.faint,
+              fixedSize: const Size.square(40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: const CircleBorder(),
             ),
           ),
           // Mic: plain when idle, filled danger while recording.
@@ -642,23 +683,129 @@ class _Bubble extends StatelessWidget {
               bottomRight: Radius.circular(mine ? 4 : JmRadius.lg),
             ),
           ),
-          child: Text.rich(
-            TextSpan(
-              text: message.text,
-              children: [
-                if (typing)
-                  TextSpan(
-                    text: ' ▍',
-                    style: TextStyle(color: c.ocean),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.attachments.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(bottom: message.text.isEmpty ? 0 : 8),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final a in message.attachments) _Thumb(attachment: a, size: 120),
+                    ],
                   ),
-              ],
-            ),
-            style: context.type.body.copyWith(
-              fontSize: 15,
-              color: mine ? Colors.white : c.text,
-            ),
+                ),
+              if (message.text.isNotEmpty || typing)
+                Text.rich(
+                  TextSpan(
+                    text: message.text,
+                    children: [
+                      if (typing)
+                        TextSpan(
+                          text: ' ▍',
+                          style: TextStyle(color: c.ocean),
+                        ),
+                    ],
+                  ),
+                  style: context.type.body.copyWith(
+                    fontSize: 15,
+                    color: mine ? Colors.white : c.text,
+                  ),
+                ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A picture in a bubble or in the pending row. Server attachments come
+/// back as signed https URLs; the preview build hands over file URIs.
+class _Thumb extends StatelessWidget {
+  const _Thumb({required this.attachment, required this.size});
+  final AiAttachment attachment;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    final uri = Uri.tryParse(attachment.url);
+    final Widget image = uri == null || attachment.url.isEmpty
+        ? Icon(Icons.image_outlined, color: c.muted)
+        : uri.scheme == 'file'
+        ? Image.file(File(uri.toFilePath()), fit: BoxFit.cover)
+        : Image.network(
+            attachment.url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => Icon(Icons.broken_image_outlined, color: c.muted),
+          );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: size,
+        height: size,
+        color: c.card,
+        child: image,
+      ),
+    );
+  }
+}
+
+/// Images waiting to go with the next message, each with a remove button.
+class _PendingRow extends StatelessWidget {
+  const _PendingRow({required this.attachments, required this.uploading, required this.onRemove});
+  final List<AiAttachment> attachments;
+  final bool uploading;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return SizedBox(
+      height: 64,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final a in attachments)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _Thumb(attachment: a, size: 56),
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: Material(
+                      color: c.ink,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => onRemove(a.id),
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: Icon(Icons.close_rounded, size: 12, color: c.ground),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (uploading)
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(10)),
+              child: Center(
+                child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.ocean)),
+              ),
+            ),
+        ],
       ),
     );
   }

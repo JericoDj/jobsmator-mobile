@@ -58,3 +58,8 @@ firebase.json
 *.override.json
 *.secret.json
 
+
+# Per-environment dart-defines (keys live here); env.example.json is the template.
+env.local.json
+env.preview.json
+env.prod.json

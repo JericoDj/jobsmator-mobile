@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'api_client.dart';
@@ -15,7 +16,15 @@ class MockApiClient implements ApiClient {
   final _latency = const Duration(milliseconds: 250);
 
   Map<String, dynamic> _defaults = const UserDefaults(interests: ['Flutter Developer', 'Mobile Engineer']).toJson();
-  Map<String, dynamic> _subscription = {'plan': 'free', 'searchesUsed': 0, 'renewsAt': null};
+  Map<String, dynamic> _subscription = {
+    'plan': 'free',
+    'searchesUsed': 0,
+    'searchLimit': 1,
+    'period': 'day',
+    'renewsAt': null,
+    'source': 'none',
+    'entitlementActive': false,
+  };
   Map<String, dynamic> _settings = {};
   final List<Map<String, dynamic>> _automations = [
     {
@@ -82,6 +91,17 @@ class MockApiClient implements ApiClient {
       };
     }
     if (path == '/v1/resumes') return {'items': _resumes.reversed.toList()};
+    final oneResume = RegExp(r'^/v1/resumes/([^/]+)$').firstMatch(path);
+    if (oneResume != null) {
+      final r = _resumes.where((r) => r['id'] == oneResume.group(1)).firstOrNull;
+      if (r != null) return r;
+      throw ApiException('not_found', 'Resume not found', status: 404);
+    }
+    final resumeMatches = RegExp(r'^/v1/resumes/([^/]+)/matches$').firstMatch(path);
+    if (resumeMatches != null) {
+      final tags = (_mockAnalysis['tags'] as List).cast<String>();
+      return {'items': (_jobs.values.toList()..sort((a, b) => (b['score'] as int).compareTo(a['score'] as int))).take(5).toList(), 'tags': tags};
+    }
     final runJobs = RegExp(r'^/v1/runs/([^/]+)/jobs$').firstMatch(path);
     if (runJobs != null) {
       final items = _jobs.values.toList()..sort((a, b) => a['rank'].compareTo(b['rank']));
@@ -146,13 +166,44 @@ class MockApiClient implements ApiClient {
     }
     if (path == '/v1/resumes') {
       final id = 'r_${_resumes.length + 1}';
+      // Real analysis runs in the background and takes a few seconds; the
+      // mock has nothing to run, so it "finishes" immediately rather than
+      // making the preview build simulate a fake pending state forever.
       _resumes.add({
         'id': id,
         'filename': b['filename'],
         'sizeBytes': b['sizeBytes'],
         'createdAt': DateTime.now().toIso8601String(),
+        'analysis': _mockAnalysis,
+        'analyzedAt': DateTime.now().toIso8601String(),
+        'analysisStatus': 'done',
       });
       return {'resumeId': id};
+    }
+    final analyze = RegExp(r'^/v1/resumes/([^/]+)/analyze$').firstMatch(path);
+    if (analyze != null) {
+      final i = _resumes.indexWhere((r) => r['id'] == analyze.group(1));
+      if (i < 0) throw ApiException('not_found', 'Resume not found', status: 404);
+      _resumes[i] = {
+        ..._resumes[i],
+        'analysis': _mockAnalysis,
+        'analyzedAt': DateTime.now().toIso8601String(),
+        'analysisStatus': 'done',
+      };
+      return _resumes[i];
+    }
+    if (path == '/v1/billing/sync') {
+      return {
+        'id': 'u_1',
+        'email': 'jerico@example.com',
+        'displayName': 'Jerico De Jesus',
+        'defaults': _defaults,
+        'subscription': _subscription,
+        'sheetId': null,
+        'profile': _careerProfile,
+        'automations': _automations,
+        'settings': _settings,
+      };
     }
     if (path == '/v1/runs') {
       if ((b['interests'] as List).isEmpty || (b['sites'] as List).isEmpty) {
@@ -165,10 +216,15 @@ class MockApiClient implements ApiClient {
     }
     if (path == '/v1/billing/checkout') {
       final plan = b['plan'] as String? ?? 'free';
+      final pro = plan == 'pro';
       _subscription = {
         'plan': plan,
         'searchesUsed': 0,
-        'renewsAt': plan == 'pro' ? DateTime.now().add(const Duration(days: 30)).toIso8601String() : null,
+        'searchLimit': pro ? 5 : 1,
+        'period': 'day',
+        'renewsAt': pro ? DateTime.now().add(const Duration(days: 30)).toIso8601String() : null,
+        'source': pro ? 'manual' : 'none',
+        'entitlementActive': false,
       };
       return {'subscription': _subscription};
     }
@@ -216,8 +272,15 @@ class MockApiClient implements ApiClient {
   }
 
   @override
+  Future<Map<String, dynamic>> upload(String path, {required File file, required String field}) async {
+    await Future.delayed(_latency);
+    return {'id': 'att_${Random().nextInt(1 << 20)}', 'filename': file.uri.pathSegments.last, 'kind': 'other', 'analysis': null, 'url': file.uri.toString()};
+  }
+
+  @override
   Future<void> delete(String path) async {
     await Future.delayed(_latency);
+    if (path == '/v1/me') return; // account deletion: nothing to wipe in fixtures
     _resumes.removeWhere((r) => path.endsWith(r['id'] as String));
     if (path.startsWith('/v1/automations/')) _automations.removeWhere((a) => path.endsWith(a['id'] as String));
   }
@@ -255,6 +318,28 @@ class MockApiClient implements ApiClient {
 }
 
 final _rng = Random(7);
+
+/// What `POST /v1/resumes/:id/analyze` returns in preview — matches the
+/// `ResumeAnalysis` contract in PLAN.md.
+const _mockAnalysis = {
+  'summary':
+      'A Flutter developer with three years building candidate-facing mobile apps for fintech and HR platforms. Comfortable owning a feature end to end, from Firebase backend to shipped release.',
+  'headline': 'Mid-level Flutter developer, 3 yrs',
+  'seniority': 'mid',
+  'strengths': [
+    'Shipped a production Flutter app to both stores on a two-week cadence',
+    'Strong Firebase Auth and Cloud Functions experience',
+    'Comfortable owning a feature end to end',
+  ],
+  'fixes': [
+    'Add measurable impact (numbers, %, team size) to each role',
+    'List CI/CD tooling by name, not just "CI/CD"',
+  ],
+  'skills': ['flutter', 'dart', 'firebase', 'provider', 'rest apis', 'ci/cd', 'sql'],
+  'roles': ['Flutter Developer', 'Mobile Engineer'],
+  'tags': ['flutter developer', 'mobile engineer', 'flutter', 'firebase', 'fintech'],
+  'industries': ['Software & IT', 'Fintech'],
+};
 
 const _careerProfile = {
   'headline': 'Flutter developer · 3 years · fintech and HR tech',

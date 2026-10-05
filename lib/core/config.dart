@@ -20,6 +20,12 @@ abstract final class AppConfig {
 
   static const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3001');
 
+  /// RevenueCat public SDK keys. Empty by default — [StoreBilling.configure]
+  /// treats an empty key as "not set up yet" and stays a no-op, so builds
+  /// without them (this repo's default) never crash.
+  static const rcApiKeyIos = String.fromEnvironment('RC_API_KEY_IOS', defaultValue: '');
+  static const rcApiKeyAndroid = String.fromEnvironment('RC_API_KEY_ANDROID', defaultValue: '');
+
   /// Preview mode skips Firebase, signs in a fake user and serves fixture data.
   static const preview = bool.fromEnvironment('PREVIEW');
 

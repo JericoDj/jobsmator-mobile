@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -22,6 +24,9 @@ abstract class ApiClient {
   Future<Map<String, dynamic>> post(String path, {Object? body});
   Future<Map<String, dynamic>> patch(String path, {Object? body});
   Future<void> delete(String path);
+
+  /// `multipart/form-data` with one file under [field].
+  Future<Map<String, dynamic>> upload(String path, {required File file, required String field});
 }
 
 class HttpApiClient implements ApiClient {
@@ -66,6 +71,13 @@ class HttpApiClient implements ApiClient {
 
   @override
   Future<void> delete(String path) => _run(() => _dio.delete(path));
+
+  @override
+  Future<Map<String, dynamic>> upload(String path, {required File file, required String field}) => _run(() async {
+    final form = FormData.fromMap({field: await MultipartFile.fromFile(file.path)});
+    // Uploads plus a model call take longer than a JSON round trip.
+    return _dio.post(path, data: form, options: Options(sendTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 90)));
+  });
 
   /// Surfaces [ApiException] directly instead of wrapped in DioException.
   Future<Map<String, dynamic>> _run(Future<Response> Function() call) async {

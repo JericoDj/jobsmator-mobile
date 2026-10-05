@@ -8,7 +8,7 @@ abstract final class JmCopy {
       "We couldn't read that resume. Try a text-based PDF instead of a scan, or paste a different link.",
     'engine_unavailable' => 'Job sites are slow right now. Try again in a minute.',
     'too_many_runs' =>
-      "You've reached your search limit for this hour."
+      "You've used today's searches."
           '${retryAt == null ? '' : ' Next one at ${_hhmm(retryAt)}.'}',
     'run_in_progress' => 'A search is already running — hang on.',
     'network' => 'Check your connection and try again.',

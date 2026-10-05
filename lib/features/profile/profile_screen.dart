@@ -6,6 +6,7 @@ import '../../app/routes.dart';
 import '../../app/theme/theme.dart';
 import '../../core/copy.dart';
 import '../../core/models/subscription.dart';
+import '../../core/api/api_client.dart';
 import '../../core/models/user_defaults.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/job_catalog_provider.dart';
@@ -15,6 +16,7 @@ import '../../providers/run_provider.dart';
 import '../../providers/subscription_provider.dart';
 import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_page.dart';
+import '../shared/widgets/jm_toast.dart';
 import '../auth/widgets/auth_scaffold.dart';
 import 'profile_stats.dart';
 import 'share_progress.dart';
@@ -30,6 +32,58 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool _deleting = false;
+
+  void _clearProviders() {
+    context.read<JobCatalogProvider>().clear();
+    context.read<RunProvider>().clear();
+    context.read<PreferencesProvider>().clear();
+    context.read<SubscriptionProvider>().clear();
+  }
+
+  /// Account deletion is permanent and the stores require it to be reachable
+  /// from inside the app, so it asks once, plainly, and says what goes.
+  Future<void> _confirmDelete() async {
+    final c = context.jm;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete your account?'),
+        content: const Text(
+          'This removes your resumes, searches, saved jobs and conversations for good. '
+          'It cannot be undone, and an active subscription is not refunded — cancel it in the App Store or Google Play first.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep my account')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: c.danger),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      final auth = context.read<AuthProvider>();
+      final api = context.read<ApiClient>();
+      _clearProviders();
+      await auth.deleteAccount(api);
+      // The auth listener routes back to the welcome screen on its own.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      showJmToast(
+        context,
+        title: "Couldn't delete your account",
+        body: messageOf(e, fallback: 'Try again in a moment.'),
+        tone: ToastTone.error,
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -318,9 +372,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SettingsRow(
                 icon: Icons.workspace_premium_outlined,
                 label: 'Plan',
-                value: subs.isPro
-                    ? 'Pro · ${subs.searchesLeft} searches left this hour'
-                    : 'Free · ${subs.searchesLeft} search left today',
+                value: '${subs.isPro ? 'Pro' : 'Free'} · ${subs.searchesLeft} ${subs.searchesLeft == 1 ? 'search' : 'searches'} left ${subs.current.periodLabel}',
                 onTap: () => context.push(AppRoutes.subscribe),
               ),
               SettingsRow(
@@ -340,15 +392,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label: 'Sign out',
             onPressed: () async {
               try {
-                context.read<JobCatalogProvider>().clear();
-                context.read<RunProvider>().clear();
-                context.read<PreferencesProvider>().clear();
-                context.read<SubscriptionProvider>().clear();
+                _clearProviders();
                 await auth.signOut();
               } catch (e) {
                 // ignore
               }
             },
+          ),
+          const SizedBox(height: JmSpace.x3),
+          Center(
+            child: TextButton(
+              onPressed: _deleting ? null : _confirmDelete,
+              style: TextButton.styleFrom(foregroundColor: c.muted),
+              child: Text(_deleting ? 'Deleting…' : 'Delete my account'),
+            ),
           ),
           const SizedBox(height: JmSpace.x4),
           const AppVersionLabel(prefix: 'JobsMator · '),

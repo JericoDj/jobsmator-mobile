@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,7 @@ import '../../app/theme/theme.dart';
 import '../../controllers/home_controller.dart';
 import '../../core/copy.dart';
 import '../../core/models/job.dart';
+import '../../core/models/resume.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/job_catalog_provider.dart';
 import '../../providers/preferences_provider.dart';
@@ -17,6 +20,7 @@ import '../shared/widgets/jm_buttons.dart';
 import '../shared/widgets/jm_page.dart';
 import '../shared/widgets/notification_bell.dart';
 import '../shared/widgets/section_header.dart';
+import '../shared/widgets/selection_chip.dart';
 import '../shared/widgets/tab_header.dart';
 import 'job_list_screen.dart';
 
@@ -31,6 +35,11 @@ class OnboardingCheck extends StatefulWidget {
 }
 
 class _OnboardingCheckState extends State<OnboardingCheck> {
+  // App-session-wide, not per-widget: once we've sent a user to Upload for
+  // being brand new, a manual trip back to Home (e.g. via the tab bar)
+  // must not bounce them straight back out again.
+  static bool _redirectedThisSession = false;
+
   bool _checked = false;
 
   @override
@@ -40,7 +49,11 @@ class _OnboardingCheckState extends State<OnboardingCheck> {
 
     if (!_checked && prefs.loaded && resumes.loaded) {
       _checked = true;
-      if (prefs.interests.isEmpty || resumes.latest == null) {
+      // Brand new: no interests picked *and* nothing uploaded. A user with
+      // either already has a reason to see Home's empty states instead.
+      final brandNew = prefs.interests.isEmpty && resumes.latest == null;
+      if (brandNew && !_redirectedThisSession) {
+        _redirectedThisSession = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) context.go(AppRoutes.upload);
         });
@@ -51,7 +64,6 @@ class _OnboardingCheckState extends State<OnboardingCheck> {
 }
 
 class HomeScreen extends StatelessWidget {
-
   const HomeScreen({super.key});
 
   String _greeting() {
@@ -72,147 +84,115 @@ class HomeScreen extends StatelessWidget {
     final user = context.watch<AuthProvider>().user;
     final c = context.jm;
 
-        final jobs = catalog.all.where((j) => !j.hidden).toList();
+    final jobs = catalog.all.where((j) => !j.hidden).toList();
     final applied = jobs.where((j) => j.applied).length;
     final total = jobs.length;
     final notApplied = total - applied;
     final applyRate = total == 0 ? 0.0 : applied / total;
-    final avgScore = total == 0
-        ? 0.0
-        : jobs.fold<int>(0, (sum, j) => sum + j.score) / total / 100;
-    final matches =
-        (jobs.where((j) => j.tier == Tier.strong && !j.applied).toList()
-              ..sort((a, b) => b.score.compareTo(a.score)))
-            .take(3)
-            .toList();
 
     return OnboardingCheck(
-      child: JmPage(
-      maxWidth: JmLayout.results,
-      padding: JmPage.tabPadding(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TabHeader(
-            title: '${_greeting()}, ${user?.firstName ?? 'there'}',
-            subtitle: 'Search less. Apply more.',
-            trailing: const NotificationBell(),
-          ),
-          const SizedBox(height: JmSpace.x4),
+      child: RefreshIndicator(
+        onRefresh: ctrl.refreshAll,
+        child: JmPage(
+          maxWidth: JmLayout.results,
+          padding: JmPage.tabPadding(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TabHeader(
+                title: '${_greeting()}, ${user?.firstName ?? 'there'}',
+                subtitle: 'Search less. Apply more.',
+                trailing: const NotificationBell(),
+              ),
+              const SizedBox(height: JmSpace.x4),
 
-          // 1 · Search
-          _SearchCard(
-            left: ctrl.searchesLeft,
-            limit: ctrl.searchLimit,
-            period: ctrl.planPeriod,
-            running: ctrl.runInProgress,
-            nextAutoRunAt: ctrl.nextAutoRunAt,
-            onSearch: () => context.go(
-              ctrl.runInProgress
-                  ? AppRoutes.run(context.read<RunProvider>().current!.id)
-                  : AppRoutes.upload,
-            ),
-            onSchedule: () => context.push(AppRoutes.schedule),
-          ),
-          const SizedBox(height: JmSpace.x2),
+              // 1 · Search
+              _SearchCard(
+                left: ctrl.searchesLeft,
+                limit: ctrl.searchLimit,
+                period: ctrl.planPeriod,
+                running: ctrl.runInProgress,
+                nextAutoRunAt: ctrl.nextAutoRunAt,
+                onSearch: () => context.go(
+                  ctrl.runInProgress
+                      ? AppRoutes.run(context.read<RunProvider>().current!.id)
+                      : AppRoutes.upload,
+                ),
+                onSchedule: () => context.push(AppRoutes.schedule),
+              ),
+              const SizedBox(height: JmSpace.x2),
 
-          // 2 · Jobs
-          SectionHeader(
-            title: 'Your jobs',
-            
-            action: 'View all',
-            onAction: () => context.push(AppRoutes.history),
-          ),
-          const SizedBox(height: JmSpace.x3),
-          Container(
-            decoration: BoxDecoration(
-              color: c.card,
-              borderRadius: JmRadius.lgR,
-              border: Border.all(color: c.line),
-            ),
-            child: IntrinsicHeight(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _Count(
-                      value: total,
-                      label: 'Total jobs',
-                      color: c.ocean,
-                    ),
+              // 2 · Jobs
+              SectionHeader(
+                title: 'Your jobs',
+
+                action: 'View all',
+                onAction: () => context.push(AppRoutes.history),
+              ),
+              const SizedBox(height: JmSpace.x3),
+              Container(
+                decoration: BoxDecoration(
+                  color: c.card,
+                  borderRadius: JmRadius.lgR,
+                  border: Border.all(color: c.line),
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _Count(
+                          value: total,
+                          label: 'Total jobs',
+                          color: c.ocean,
+                        ),
+                      ),
+                      VerticalDivider(width: 1, color: c.line),
+                      Expanded(
+                        child: _Count(
+                          value: applied,
+                          label: 'Applied',
+                          color: c.match,
+                        ),
+                      ),
+                      VerticalDivider(width: 1, color: c.line),
+                      Expanded(
+                        child: _Count(
+                          value: notApplied,
+                          label: 'Not applied',
+                          color: c.sky,
+                        ),
+                      ),
+                    ],
                   ),
-                  VerticalDivider(width: 1, color: c.line),
-                  Expanded(
-                    child: _Count(
-                      value: applied,
-                      label: 'Applied',
-                      color: c.match,
-                    ),
-                  ),
-                  VerticalDivider(width: 1, color: c.line),
-                  Expanded(
-                    child: _Count(
-                      value: notApplied,
-                      label: 'Not applied',
-                      color: c.sky,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: JmSpace.x4),
+              _RateBar(label: 'Application rate', value: applyRate, color: c.ocean),
+              const SizedBox(height: JmSpace.x4),
+              _RateBar(
+                label: 'Strong match rate',
+                value: ctrl.strongMatchRate,
+                color: c.match,
+              ),
+              const SizedBox(height: JmSpace.x3),
+              // 3 · Matches — scoped to whichever resume is selected, since
+              // scoring now happens per resume rather than per catalog job.
+              SectionHeader(
+                title: 'Matches',
+
+                action: 'See all',
+                onAction: () =>
+                    context.push(AppRoutes.jobList(JobListKind.matches.name)),
+              ),
+              const SizedBox(height: JmSpace.x1),
+              const _MatchesSection(),
+              const SizedBox(height: JmSpace.x6),
+              const SizedBox(height: JmSpace.x6),
+            ],
           ),
-          const SizedBox(height: JmSpace.x4),
-          _RateBar(label: 'Application rate', value: applyRate, color: c.ocean),
-          const SizedBox(height: JmSpace.x4),
-          _RateBar(
-            label: 'Average match score',
-            value: avgScore,
-            color: c.match,
-          ),
-          const SizedBox(height: JmSpace.x3),
-          // 3 · Matches
-          SectionHeader(
-            title: 'Matches',
-            
-            action: 'See all',
-            onAction: () =>
-                context.push(AppRoutes.jobList(JobListKind.matches.name)),
-          ),
-          const SizedBox(height: JmSpace.x1),
-          if (matches.isEmpty)
-            _Empty(
-              text: ctrl.hasResume
-                  ? 'No matches yet.'
-                  : 'Upload a resume to get matches.',
-              action: SecondaryButton(
-                label: 'Find matching jobs',
-                onPressed: () => context.go(AppRoutes.upload),
-              ),
-            )
-          else
-            Container(
-              decoration: BoxDecoration(
-                color: c.card,
-                borderRadius: JmRadius.lgR,
-                border: Border.all(color: c.line),
-              ),
-              child: Column(
-                children: [
-                  for (final (i, job) in matches.indexed) ...[
-                    if (i > 0) Divider(height: 1, color: c.line),
-                    _MatchRow(
-                      job: job,
-                      // Sample rows have nothing to open; real ones go to the job.
-                      onTap: () => context.push(AppRoutes.job(job.id)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          const SizedBox(height: JmSpace.x6),
-          const SizedBox(height: JmSpace.x6),
-        ],
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -443,6 +423,245 @@ class _MatchRow extends StatelessWidget {
             Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The resume-scoped matches list: a selector chip (opens a picker when
+/// there's more than one resume), the resume's top tags, then its ranked
+/// matches from `GET /v1/resumes/:id/matches`. While the resume is still
+/// being analysed, polls `GET /v1/resumes/:id` every 4s for up to 2
+/// minutes rather than leaving the section stuck on a spinner forever.
+class _MatchesSection extends StatefulWidget {
+  const _MatchesSection();
+
+  @override
+  State<_MatchesSection> createState() => _MatchesSectionState();
+}
+
+class _MatchesSectionState extends State<_MatchesSection> {
+  Timer? _poll;
+  DateTime? _pollStart;
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  void _ensurePolling(ResumeProvider resumes, String id) {
+    if (_poll != null) return;
+    _pollStart = DateTime.now();
+    _poll = Timer.periodic(const Duration(seconds: 4), (timer) async {
+      if (DateTime.now().difference(_pollStart!) > const Duration(minutes: 2)) {
+        timer.cancel();
+        _poll = null;
+        return;
+      }
+      try {
+        final updated = await resumes.fetchOne(id);
+        if (updated.analysisStatus != ResumeAnalysisStatus.pending) {
+          timer.cancel();
+          _poll = null;
+        }
+      } catch (_) {
+        // Transient poll failures are ignored; the next tick retries.
+      }
+    });
+  }
+
+  Future<void> _pickResume(BuildContext context, ResumeProvider resumes) {
+    final c = context.jm;
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final r in resumes.resumes)
+              ListTile(
+                leading: Icon(
+                  Icons.description_outlined,
+                  color: r.id == resumes.selectedId ? c.oceanDeep : c.muted,
+                ),
+                title: Text(r.filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: r.id == resumes.selectedId
+                    ? Icon(Icons.check_rounded, color: c.oceanDeep)
+                    : null,
+                onTap: () {
+                  resumes.select(r.id);
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resumes = context.watch<ResumeProvider>();
+    final c = context.jm;
+    final selected = resumes.selected;
+
+    if (selected == null) {
+      return _Empty(
+        text: 'Upload a resume to get matches.',
+        action: SecondaryButton(
+          label: 'Upload a resume',
+          onPressed: () => context.go(AppRoutes.upload),
+        ),
+      );
+    }
+
+    final pending = selected.analysisStatus == ResumeAnalysisStatus.pending;
+    if (pending) {
+      _ensurePolling(resumes, selected.id);
+    } else {
+      _poll?.cancel();
+      _poll = null;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _ResumeSelectorChip(
+            resume: selected,
+            expandable: resumes.resumes.length > 1,
+            onTap: resumes.resumes.length > 1 ? () => _pickResume(context, resumes) : null,
+          ),
+        ),
+        const SizedBox(height: JmSpace.x2),
+        if (pending)
+          const _AnalyzingCard()
+        else if (selected.analysisStatus == ResumeAnalysisStatus.failed)
+          const _Empty(text: "Couldn't analyze this resume. Try re-analyzing it from your AI profile.")
+        else ...[
+          if (selected.analysis != null && selected.analysis!.tags.isNotEmpty) ...[
+            Wrap(
+              spacing: JmSpace.x2,
+              runSpacing: JmSpace.x2,
+              children: [
+                for (final t in selected.analysis!.tags.take(5))
+                  SelectionChip(label: t, selected: false, onChanged: null),
+              ],
+            ),
+            const SizedBox(height: JmSpace.x3),
+          ],
+          FutureBuilder<ResumeMatches>(
+            key: ValueKey(selected.id),
+            future: resumes.loadMatches(selected.id),
+            initialData: resumes.cachedMatches(selected.id),
+            builder: (context, snap) {
+              final items = snap.data?.items ?? const <Job>[];
+              if (snap.connectionState == ConnectionState.waiting && items.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: JmSpace.x6),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (items.isEmpty) {
+                return const _Empty(text: 'No matches yet for this resume.');
+              }
+              final top = items.take(5).toList();
+              return Container(
+                decoration: BoxDecoration(
+                  color: c.card,
+                  borderRadius: JmRadius.lgR,
+                  border: Border.all(color: c.line),
+                ),
+                child: Column(
+                  children: [
+                    for (final (i, job) in top.indexed) ...[
+                      if (i > 0) Divider(height: 1, color: c.line),
+                      _MatchRow(job: job, onTap: () => context.push(AppRoutes.job(job.id))),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// "Matches for: (filename) ▾" — the ▾ only shows once there's something
+/// to switch to.
+class _ResumeSelectorChip extends StatelessWidget {
+  const _ResumeSelectorChip({required this.resume, required this.expandable, this.onTap});
+  final Resume resume;
+  final bool expandable;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: JmRadius.pillR,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: JmRadius.pillR,
+            border: Border.all(color: c.line),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.description_outlined, size: 14, color: c.muted),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  'Matches for: ${resume.filename}',
+                  style: context.type.meta.copyWith(fontSize: 12.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (expandable) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.expand_more_rounded, size: 16, color: c.muted),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalyzingCard extends StatelessWidget {
+  const _AnalyzingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return Container(
+      padding: const EdgeInsets.all(JmSpace.x4),
+      decoration: BoxDecoration(color: c.surface, borderRadius: JmRadius.lgR),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: c.ocean),
+          ),
+          const SizedBox(width: JmSpace.x3),
+          Expanded(
+            child: Text('Analyzing your resume…', style: context.type.body.copyWith(fontSize: 14)),
+          ),
+        ],
       ),
     );
   }

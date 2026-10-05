@@ -52,16 +52,16 @@ class _JobsMatorAppState extends State<JobsMatorApp> {
           create: (ctx) => AppConfig.preview ? MockApiClient() : HttpApiClient(tokenProvider: _auth.idToken),
         ),
         ChangeNotifierProxyProvider<AuthProvider, ResumeProvider>(
-          create: (ctx) => ResumeProvider(ctx.read<ApiClient>(), uid: _auth.user?.uid),
+          create: (ctx) => ResumeProvider(ctx.read<ApiClient>(), widget.prefs, uid: _auth.user?.uid),
           update: (ctx, auth, prev) => prev != null && prev.uid == auth.user?.uid
               ? prev
-              : ResumeProvider(ctx.read<ApiClient>(), uid: auth.user?.uid),
+              : ResumeProvider(ctx.read<ApiClient>(), widget.prefs, uid: auth.user?.uid),
         ),
         ChangeNotifierProvider(create: (ctx) => PreferencesProvider(ctx.read<ApiClient>())),
         ChangeNotifierProvider(create: (ctx) => RunProvider(ctx.read<ApiClient>())),
         ChangeNotifierProvider(create: (ctx) => JobsProvider(ctx.read<ApiClient>())),
         ChangeNotifierProvider(create: (ctx) => JobCatalogProvider(ctx.read<ApiClient>())),
-        Provider<AiService>(create: (_) => const MockAiService()),
+        Provider<AiService>(create: (ctx) => AppConfig.preview ? MockAiService() : ApiAiService(ctx.read<ApiClient>())),
         ChangeNotifierProvider(create: (ctx) => AiProvider(ctx.read<AiService>())),
         ChangeNotifierProvider(create: (ctx) => SubscriptionProvider(ctx.read<ApiClient>())),
       ],

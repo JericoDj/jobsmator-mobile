@@ -7,7 +7,7 @@
         </intent>
     </queries>
     <application
-        android:label="jobsmator_mobile"
+        android:label="JobsMator"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
