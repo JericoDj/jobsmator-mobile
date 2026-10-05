@@ -306,14 +306,14 @@ class _AssistantDisc extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.ground,
             shape: BoxShape.circle,
-            // Mid-blue: a tint vanished against the glass, a solid ring read as
-            // a hard outline. This sits between the two and still looks lit.
-            border: Border.all(color: active ? c.ocean.withValues(alpha: .6) : c.line, width: active ? 3 : 1),
+            // No ring: selection shows as a cobalt glow under the disc, so the
+            // mark keeps its own silhouette instead of being boxed in.
+            border: Border.all(color: c.line),
             boxShadow: [
               BoxShadow(
-                color: active ? c.ocean.withValues(alpha: .26) : JmColors.navy.withValues(alpha: .14),
-                blurRadius: active ? 14 : 10,
-                spreadRadius: active ? 1 : 0,
+                color: active ? c.ocean.withValues(alpha: .34) : JmColors.navy.withValues(alpha: .14),
+                blurRadius: active ? 16 : 10,
+                spreadRadius: active ? 2 : 0,
                 offset: const Offset(0, 4),
               ),
             ],
