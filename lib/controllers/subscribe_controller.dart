@@ -24,6 +24,10 @@ class SubscribeController extends ChangeNotifier {
   bool get busy => _busy;
   String? get error => _error;
   bool get alreadyPro => _subs.isPro;
+
+  /// Pro that came from an App Store / Play subscription. Switching such a
+  /// user to Free is the store's job, not ours — see [confirm].
+  bool get proFromStore => _subs.isPro && _subs.current.source == SubscriptionSource.revenuecat;
   bool get canConfirm => !_busy && _selected != _subs.plan;
 
   /// The store button only makes sense while RevenueCat is actually wired
@@ -68,6 +72,12 @@ class SubscribeController extends ChangeNotifier {
         if (!active) return false; // user cancelled; not an error
         await _subs.syncWithStore();
         return true;
+      }
+      if (_selected == Plan.free && proFromStore) {
+        // Hand off to the store: cancelling there is what actually stops the
+        // billing, and the next sync will bring the plan down by itself.
+        await StoreBilling.manageSubscriptions();
+        return false;
       }
       await _subs.subscribe(_selected);
       return true;

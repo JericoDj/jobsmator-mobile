@@ -42,8 +42,20 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   Future<void> _confirm(BuildContext context) async {
     final ctrl = context.read<SubscribeController>();
     final wantsPro = ctrl.selected == Plan.pro;
+    final toStore = !wantsPro && ctrl.proFromStore;
     final ok = await ctrl.confirm();
-    if (!ok || !context.mounted) return;
+    if (!context.mounted) return;
+    if (toStore) {
+      // The store's own page is open now; the plan drops when it lapses.
+      showJmToast(
+        context,
+        title: 'Manage it in the store',
+        body: 'Cancel there and Pro stays on until the period you paid for ends.',
+        tone: ToastTone.info,
+      );
+      return;
+    }
+    if (!ok) return;
     showJmToast(
       context,
       title: wantsPro ? "You're on Pro" : "You're on Free",
@@ -114,7 +126,11 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           ],
           PrimaryButton(
             label: ctrl.alreadyPro
-                ? (pro ? "You're on Pro" : 'Switch to Free')
+                ? (pro
+                      ? "You're on Pro"
+                      : ctrl.proFromStore
+                      ? 'Cancel in the store'
+                      : 'Switch to Free')
                 : (pro
                       ? 'Start Pro · ${offer.price} / ${offer.term.unit}'
                       : 'Stay on Free'),

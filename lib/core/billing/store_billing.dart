@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:intl/intl.dart';
 
@@ -115,6 +116,26 @@ abstract final class StoreBilling {
       }
       throw Exception("We couldn't complete that purchase. You haven't been charged.");
     }
+  }
+
+  /// Opens the App Store / Play Store subscription screen. Cancelling has to
+  /// happen there — clearing our own record would leave the store still
+  /// billing, so this is what "switch to Free" does for a paid subscriber.
+  /// RevenueCat hands back the right deep link per store; the plain store
+  /// URLs are the fallback when it has none (e.g. no active subscription).
+  static Future<void> manageSubscriptions() async {
+    String? url;
+    if (_configured) {
+      try {
+        url = (await Purchases.getCustomerInfo()).managementURL;
+      } catch (e) {
+        if (kDebugMode) debugPrint('StoreBilling.manageSubscriptions lookup failed: $e');
+      }
+    }
+    url ??= defaultTargetPlatform == TargetPlatform.android
+        ? 'https://play.google.com/store/account/subscriptions'
+        : 'https://apps.apple.com/account/subscriptions';
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   /// `Purchases.restorePurchases()` — for the "Restore purchases" button.
