@@ -192,7 +192,8 @@ class _AiScreenState extends State<AiScreen> {
 
     return Scaffold(
       body: SafeArea(
-        bottom: false,
+        // The composer sits on the bottom inset the shell reports, which now
+        // includes the floating tab bar it must not disappear behind.
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
           onHorizontalDragStart: _onDragStart,

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -55,28 +57,21 @@ class _AppShellState extends State<AppShell> {
     final showPill = !isPro && index != AppShell.aiTab && !keyboardOpen;
     final mq = MediaQuery.of(context);
 
-    // JmBottomNav is 50px + bottom safe area.
-    final bottomNavHeight = 50.0 + mq.padding.bottom;
+    // The floating bar's own height plus the margin it sits on.
+    final bottomNavHeight = JmBottomNav.totalHeight + mq.padding.bottom;
     // The inner scaffold only needs to shrink by the portion of the keyboard
     // that overlaps the navigation shell.
     final adjustedBottomInset = math.max(0.0, mq.viewInsets.bottom - bottomNavHeight);
 
-    // If the current screen has a JmBottomBar, we float the pill higher so it
-    // doesn't cover the primary action button.
-    final String loc = GoRouterState.of(context).matchedLocation;
-    final bool hasBottomBar = loc == AppRoutes.schedule ||
-        loc == AppRoutes.upload ||
-        loc == AppRoutes.interests ||
-        loc == AppRoutes.sites ||
-        loc.startsWith('/tools/') ||
-        loc == AppRoutes.jobPreferences ||
-        loc == AppRoutes.career;
-
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      // The announcement bar owns the top inset and the tab bar owns the
-      // home-indicator inset, so the tabs must pad for neither — content
-      // runs right down to the bar and the pill simply floats over it.
+      // The bar is a floating panel with the page visible around and behind it,
+      // which is the whole point of frosting it.
+      extendBody: true,
+      // The announcement bar owns the top inset. The tab bar floats over the
+      // content now, so the tabs are handed its height as their bottom inset —
+      // a list can scroll under the glass, but it must still be able to end
+      // above it.
       body: Column(
         children: [
           const AnnouncementBar(),
@@ -86,18 +81,21 @@ class _AppShellState extends State<AppShell> {
                 Positioned.fill(
                   child: MediaQuery(
                     data: mq.copyWith(
-                      padding: mq.padding.copyWith(top: 0, bottom: 0),
-                      viewPadding: mq.viewPadding.copyWith(top: 0, bottom: 0),
+                      padding: mq.padding.copyWith(top: 0, bottom: bottomNavHeight),
+                      viewPadding: mq.viewPadding.copyWith(top: 0, bottom: bottomNavHeight),
                       viewInsets: mq.viewInsets.copyWith(bottom: adjustedBottomInset),
                     ),
                     child: widget.navigationShell,
                   ),
                 ),
                 if (showPill)
+                  // Sits at the top: the floating bar now owns the bottom edge,
+                  // and a nudge that covers the primary action is worse than one
+                  // that waits above the fold.
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: hasBottomBar ? 96 : JmSpace.x3,
+                    top: JmSpace.x3,
                     child: Center(child: _UpgradePill(onTap: () => context.push(AppRoutes.subscribe))),
                   ),
               ],
@@ -163,9 +161,9 @@ class JmNavItem {
   final IconData icon, activeIcon;
   final bool dot;
 
-  /// An asset to draw instead of [icon] — the assistant uses the product's
-  /// own robot rather than a stock glyph. Greyed out when the tab is inactive
-  /// so it still sits in the same visual hierarchy as its neighbours.
+  /// An asset drawn instead of [icon] — the assistant shows the product's own
+  /// robot. It keeps its colour in both states and sits on a white disc, so it
+  /// reads the same on the ground and on the selected pill.
   final String? image;
 }
 
@@ -175,28 +173,150 @@ class JmBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onSelect;
 
+  /// The travelling pill: wide enough to hold an icon with air around it,
+  /// short enough to leave the label outside it.
+  static const _pillWidth = 60.0;
+  static const _pillHeight = 32.0;
+  static const _barHeight = 58.0;
+
+  /// Side and bottom margin — the bar floats, so the page shows around it.
+  static const _inset = 14.0;
+
+  /// What the shell must leave free at the bottom of a scroll view.
+  static const totalHeight = _barHeight + _inset;
+
+  /// The assistant's disc, and how far it stands proud of the bar.
+  static const _discSize = 54.0;
+  static const _discLift = 18.0;
+
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: c.ground,
-        border: Border(top: BorderSide(color: c.line)),
-      ),
-      // The row is just tall enough for icon + label; SafeArea then adds
-      // the home-indicator zone underneath, painted in the same ground.
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 50,
-          child: Row(
+    final aiIndex = items.indexWhere((i) => i.image != null);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(_inset, 0, _inset, _inset + MediaQuery.paddingOf(context).bottom),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final slot = box.maxWidth / items.length;
+          return Stack(
+            // The assistant's disc rises out of the bar, so nothing may clip it.
+            clipBehavior: Clip.none,
             children: [
-              for (final (i, item) in items.indexed)
-                Expanded(
-                  child: _NavButton(item: item, active: i == currentIndex, onTap: () => onSelect(i)),
+              // Frosted panel. Saturation is what keeps the page's colour
+              // underneath from going grey behind the blur.
+              ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Container(
+                    height: _barHeight,
+                    decoration: BoxDecoration(
+                      color: c.ground.withValues(alpha: .88),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(color: c.line),
+                      boxShadow: [
+                        BoxShadow(
+                          color: JmColors.navy.withValues(alpha: .22),
+                          blurRadius: 28,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        // One pill that slides between tabs, rather than a highlight
+                        // appearing and disappearing in place: the movement is what
+                        // says "you are here now, you were there before".
+                        AnimatedPositioned(
+                          duration: JmMotion.enterExit,
+                          curve: Curves.easeOutCubic,
+                          left: slot * currentIndex + (slot - _pillWidth) / 2,
+                          top: 5,
+                          child: AnimatedOpacity(
+                            duration: JmMotion.state,
+                            // The assistant already has its own round indicator, so
+                            // the pill fades out rather than stacking behind it.
+                            opacity: currentIndex == aiIndex ? 0 : 1,
+                            child: Container(
+                              width: _pillWidth,
+                              height: _pillHeight,
+                              decoration: BoxDecoration(color: c.oceanTint, borderRadius: JmRadius.pillR),
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            for (final (i, item) in items.indexed)
+                              Expanded(
+                                child: _NavButton(item: item, active: i == currentIndex, onTap: () => onSelect(i)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // The assistant sits above the bar rather than in it: it is the one
+              // destination people open without being sent there.
+              if (aiIndex >= 0)
+                Positioned(
+                  left: slot * aiIndex + (slot - _discSize) / 2,
+                  top: -_discLift,
+                  child: _AssistantDisc(
+                    item: items[aiIndex],
+                    active: currentIndex == aiIndex,
+                    onTap: () => onSelect(aiIndex),
+                  ),
                 ),
             ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The raised robot. White disc, cobalt ring when selected, real shadow — it
+/// has to read as a button sitting on top of the bar, not a sticker on it.
+class _AssistantDisc extends StatelessWidget {
+  const _AssistantDisc({required this.item, required this.active, required this.onTap});
+  final JmNavItem item;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jm;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: item.label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: JmMotion.state,
+          curve: JmMotion.ease,
+          width: JmBottomNav._discSize,
+          height: JmBottomNav._discSize,
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: c.ground,
+            shape: BoxShape.circle,
+            border: Border.all(color: active ? c.oceanTint : c.line, width: active ? 3 : 1),
+            boxShadow: [
+              BoxShadow(
+                color: active ? c.ocean.withValues(alpha: .18) : JmColors.navy.withValues(alpha: .14),
+                blurRadius: active ? 14 : 10,
+                spreadRadius: active ? 1 : 0,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
+          child: Image.asset(item.image!, fit: BoxFit.contain),
         ),
       ),
     );
@@ -212,7 +332,8 @@ class _NavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.jm;
-    final color = active ? c.ocean : c.muted;
+    // Darker blue on the light pill, so the glyph stays the loudest thing in it.
+    final iconColor = active ? c.oceanDeep : c.muted;
     return Semantics(
       button: true,
       selected: active,
@@ -223,50 +344,49 @@ class _NavButton extends StatelessWidget {
         highlightShape: BoxShape.rectangle,
         containedInkWell: true,
         splashColor: c.oceanTint,
-        highlightColor: c.surface,
+        highlightColor: Colors.transparent,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedSwitcher(
-                  duration: JmMotion.state,
-                  child: item.image != null
-                      ? Image.asset(
-                          item.image!,
-                          key: ValueKey(active),
-                          width: 26,
-                          height: 26,
-                          // Inactive tabs are muted, so the full-colour mark would
-                          // shout; it only gets its blue back when selected.
-                          color: active ? null : color,
-                        )
-                      : Icon(active ? item.activeIcon : item.icon, key: ValueKey(active), size: 24, color: color),
-                ),
-                if (item.dot)
-                  Positioned(
-                    top: -2,
-                    right: -4,
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: c.volt,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: c.ground, width: 1.5),
+            SizedBox(
+              height: JmBottomNav._pillHeight + 5,
+              child: Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // The assistant's glyph is drawn by the raised disc above the
+                    // bar; this slot only keeps the space, label and tap target.
+                    if (item.image != null)
+                      const SizedBox.shrink()
+                    else
+                      AnimatedSwitcher(
+                        duration: JmMotion.state,
+                        child: Icon(active ? item.activeIcon : item.icon, key: ValueKey(active), size: 23, color: iconColor),
                       ),
-                    ),
-                  ),
-              ],
+                    if (item.dot)
+                      Positioned(
+                        top: -2,
+                        right: -4,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: c.volt,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: c.ground, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 3),
             AnimatedDefaultTextStyle(
               duration: JmMotion.state,
               style: context.type.meta.copyWith(
                 fontSize: 11.5,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                color: color,
+                color: active ? c.oceanDeep : c.muted,
                 height: 1.2,
               ),
               child: Text(item.label),
