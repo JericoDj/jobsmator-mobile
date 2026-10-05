@@ -111,7 +111,7 @@ class _AppShellState extends State<AppShell> {
         items: [
           const JmNavItem(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
           JmNavItem(label: 'Jobs', icon: Icons.work_outline_rounded, activeIcon: Icons.work_rounded, dot: unseen),
-          const JmNavItem(label: 'AI', icon: Icons.smart_toy_outlined, activeIcon: Icons.smart_toy_rounded),
+          const JmNavItem(label: 'AI', icon: Icons.smart_toy_outlined, activeIcon: Icons.smart_toy_rounded, image: 'assets/logo/robot.png'),
           const JmNavItem(label: 'Tools', icon: Icons.handyman_outlined, activeIcon: Icons.handyman_rounded),
           const JmNavItem(label: 'Profile', icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded),
         ],
@@ -158,10 +158,15 @@ class _UpgradePill extends StatelessWidget {
 }
 
 class JmNavItem {
-  const JmNavItem({required this.label, required this.icon, required this.activeIcon, this.dot = false});
+  const JmNavItem({required this.label, required this.icon, required this.activeIcon, this.dot = false, this.image});
   final String label;
   final IconData icon, activeIcon;
   final bool dot;
+
+  /// An asset to draw instead of [icon] — the assistant uses the product's
+  /// own robot rather than a stock glyph. Greyed out when the tab is inactive
+  /// so it still sits in the same visual hierarchy as its neighbours.
+  final String? image;
 }
 
 class JmBottomNav extends StatelessWidget {
@@ -227,7 +232,17 @@ class _NavButton extends StatelessWidget {
               children: [
                 AnimatedSwitcher(
                   duration: JmMotion.state,
-                  child: Icon(active ? item.activeIcon : item.icon, key: ValueKey(active), size: 24, color: color),
+                  child: item.image != null
+                      ? Image.asset(
+                          item.image!,
+                          key: ValueKey(active),
+                          width: 26,
+                          height: 26,
+                          // Inactive tabs are muted, so the full-colour mark would
+                          // shout; it only gets its blue back when selected.
+                          color: active ? null : color,
+                        )
+                      : Icon(active ? item.activeIcon : item.icon, key: ValueKey(active), size: 24, color: color),
                 ),
                 if (item.dot)
                   Positioned(
